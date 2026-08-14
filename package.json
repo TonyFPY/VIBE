@@ -1,0 +1,20 @@
+{
+  "name": "visual-behavior-platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "jspsych": "^8.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.6"
+  }
+}

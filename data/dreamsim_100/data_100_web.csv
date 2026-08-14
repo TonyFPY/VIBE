@@ -1,0 +1,104 @@
+id,left_vote,right_vote,votes,ref_path,left_path,right_path,split,is_imagenet,prompt
+2,1,0,8,/data/dreamsim_100/ref/000/002.jpg,/data/dreamsim_100/distort/000/002_0.jpg,/data/dreamsim_100/distort/000/002_1.jpg,train,True,grocery store
+6,1,0,8,/data/dreamsim_100/ref/000/006.jpg,/data/dreamsim_100/distort/000/006_1.jpg,/data/dreamsim_100/distort/000/006_0.jpg,train,False,gazania
+17,1,0,5,/data/dreamsim_100/ref/000/017.jpg,/data/dreamsim_100/distort/000/017_1.jpg,/data/dreamsim_100/distort/000/017_0.jpg,train,True,mask
+26,0,1,9,/data/dreamsim_100/ref/000/026.jpg,/data/dreamsim_100/distort/000/026_0.jpg,/data/dreamsim_100/distort/000/026_1.jpg,train,False,badlands
+32,1,0,8,/data/dreamsim_100/ref/000/032.jpg,/data/dreamsim_100/distort/000/032_0.jpg,/data/dreamsim_100/distort/000/032_1.jpg,test,False,pharmacy
+40,0,1,7,/data/dreamsim_100/ref/000/040.jpg,/data/dreamsim_100/distort/000/040_1.jpg,/data/dreamsim_100/distort/000/040_0.jpg,train,False,sunflower
+53,1,0,8,/data/dreamsim_100/ref/000/053.jpg,/data/dreamsim_100/distort/000/053_1.jpg,/data/dreamsim_100/distort/000/053_0.jpg,train,False,diner outdoor
+55,1,0,7,/data/dreamsim_100/ref/000/055.jpg,/data/dreamsim_100/distort/000/055_0.jpg,/data/dreamsim_100/distort/000/055_1.jpg,train,False,ramen
+56,1,0,5,/data/dreamsim_100/ref/000/056.jpg,/data/dreamsim_100/distort/000/056_1.jpg,/data/dreamsim_100/distort/000/056_0.jpg,train,True,head cabbage
+57,0,1,8,/data/dreamsim_100/ref/000/057.jpg,/data/dreamsim_100/distort/000/057_1.jpg,/data/dreamsim_100/distort/000/057_0.jpg,train,False,stable
+73,0,1,9,/data/dreamsim_100/ref/000/073.jpg,/data/dreamsim_100/distort/000/073_0.jpg,/data/dreamsim_100/distort/000/073_1.jpg,test,False,mexican aster
+79,1,0,6,/data/dreamsim_100/ref/000/079.jpg,/data/dreamsim_100/distort/000/079_1.jpg,/data/dreamsim_100/distort/000/079_0.jpg,train,True,toucan
+85,1,0,5,/data/dreamsim_100/ref/000/085.jpg,/data/dreamsim_100/distort/000/085_1.jpg,/data/dreamsim_100/distort/000/085_0.jpg,train,False,fried rice
+91,0,1,8,/data/dreamsim_100/ref/000/091.jpg,/data/dreamsim_100/distort/000/091_1.jpg,/data/dreamsim_100/distort/000/091_0.jpg,train,False,iceberg
+98,1,0,8,/data/dreamsim_100/ref/000/098.jpg,/data/dreamsim_100/distort/000/098_1.jpg,/data/dreamsim_100/distort/000/098_0.jpg,val,True,Appenzeller
+102,0,1,10,/data/dreamsim_100/ref/000/102.jpg,/data/dreamsim_100/distort/000/102_0.jpg,/data/dreamsim_100/distort/000/102_1.jpg,train,False,rock arch
+111,0,1,5,/data/dreamsim_100/ref/000/111.jpg,/data/dreamsim_100/distort/000/111_0.jpg,/data/dreamsim_100/distort/000/111_1.jpg,train,True,tailed frog
+113,0,1,8,/data/dreamsim_100/ref/000/113.jpg,/data/dreamsim_100/distort/000/113_1.jpg,/data/dreamsim_100/distort/000/113_0.jpg,train,True,Border terrier
+114,0,1,6,/data/dreamsim_100/ref/000/114.jpg,/data/dreamsim_100/distort/000/114_1.jpg,/data/dreamsim_100/distort/000/114_0.jpg,train,True,kite
+115,0,1,4,/data/dreamsim_100/ref/000/115.jpg,/data/dreamsim_100/distort/000/115_0.jpg,/data/dreamsim_100/distort/000/115_1.jpg,train,True,planetarium
+116,1,0,5,/data/dreamsim_100/ref/000/116.jpg,/data/dreamsim_100/distort/000/116_1.jpg,/data/dreamsim_100/distort/000/116_0.jpg,train,True,minibus
+121,0,1,7,/data/dreamsim_100/ref/000/121.jpg,/data/dreamsim_100/distort/000/121_0.jpg,/data/dreamsim_100/distort/000/121_1.jpg,train,False,shopping mall indoor
+122,1,0,7,/data/dreamsim_100/ref/000/122.jpg,/data/dreamsim_100/distort/000/122_0.jpg,/data/dreamsim_100/distort/000/122_1.jpg,train,False,recreation room
+124,0,1,8,/data/dreamsim_100/ref/000/124.jpg,/data/dreamsim_100/distort/000/124_0.jpg,/data/dreamsim_100/distort/000/124_1.jpg,train,False,tiger lily
+136,1,0,8,/data/dreamsim_100/ref/000/136.jpg,/data/dreamsim_100/distort/000/136_0.jpg,/data/dreamsim_100/distort/000/136_1.jpg,train,False,ice cream parlor
+144,0,1,9,/data/dreamsim_100/ref/000/144.jpg,/data/dreamsim_100/distort/000/144_0.jpg,/data/dreamsim_100/distort/000/144_1.jpg,train,False,bottle
+148,0,1,8,/data/dreamsim_100/ref/000/148.jpg,/data/dreamsim_100/distort/000/148_1.jpg,/data/dreamsim_100/distort/000/148_0.jpg,val,True,frilled lizard
+150,1,0,8,/data/dreamsim_100/ref/000/150.jpg,/data/dreamsim_100/distort/000/150_1.jpg,/data/dreamsim_100/distort/000/150_0.jpg,train,False,berth
+153,1,0,6,/data/dreamsim_100/ref/000/153.jpg,/data/dreamsim_100/distort/000/153_0.jpg,/data/dreamsim_100/distort/000/153_1.jpg,train,False,hayfield
+156,1,0,8,/data/dreamsim_100/ref/000/156.jpg,/data/dreamsim_100/distort/000/156_0.jpg,/data/dreamsim_100/distort/000/156_1.jpg,train,True,sewing machine
+161,1,0,6,/data/dreamsim_100/ref/000/161.jpg,/data/dreamsim_100/distort/000/161_1.jpg,/data/dreamsim_100/distort/000/161_0.jpg,train,False,electrical substation
+164,0,1,8,/data/dreamsim_100/ref/000/164.jpg,/data/dreamsim_100/distort/000/164_1.jpg,/data/dreamsim_100/distort/000/164_0.jpg,train,True,bearskin
+165,1,0,9,/data/dreamsim_100/ref/000/165.jpg,/data/dreamsim_100/distort/000/165_1.jpg,/data/dreamsim_100/distort/000/165_0.jpg,test,False,silverbush
+174,1,0,6,/data/dreamsim_100/ref/000/174.jpg,/data/dreamsim_100/distort/000/174_0.jpg,/data/dreamsim_100/distort/000/174_1.jpg,train,True,mask
+180,0,1,9,/data/dreamsim_100/ref/000/180.jpg,/data/dreamsim_100/distort/000/180_1.jpg,/data/dreamsim_100/distort/000/180_0.jpg,test,False,bazaar outdoor
+182,1,0,7,/data/dreamsim_100/ref/000/182.jpg,/data/dreamsim_100/distort/000/182_1.jpg,/data/dreamsim_100/distort/000/182_0.jpg,train,False,mussels
+196,0,1,7,/data/dreamsim_100/ref/000/196.jpg,/data/dreamsim_100/distort/000/196_0.jpg,/data/dreamsim_100/distort/000/196_1.jpg,train,True,polecat
+200,1,0,7,/data/dreamsim_100/ref/000/200.jpg,/data/dreamsim_100/distort/000/200_0.jpg,/data/dreamsim_100/distort/000/200_1.jpg,test,True,sulphur butterfly
+205,0,1,5,/data/dreamsim_100/ref/000/205.jpg,/data/dreamsim_100/distort/000/205_0.jpg,/data/dreamsim_100/distort/000/205_1.jpg,train,True,acoustic guitar
+212,1,0,10,/data/dreamsim_100/ref/000/212.jpg,/data/dreamsim_100/distort/000/212_1.jpg,/data/dreamsim_100/distort/000/212_0.jpg,train,False,bakery shop
+214,1,0,8,/data/dreamsim_100/ref/000/214.jpg,/data/dreamsim_100/distort/000/214_0.jpg,/data/dreamsim_100/distort/000/214_1.jpg,train,False,kennel outdoor
+228,1,0,7,/data/dreamsim_100/ref/000/228.jpg,/data/dreamsim_100/distort/000/228_0.jpg,/data/dreamsim_100/distort/000/228_1.jpg,train,True,oxcart
+229,1,0,9,/data/dreamsim_100/ref/000/229.jpg,/data/dreamsim_100/distort/000/229_0.jpg,/data/dreamsim_100/distort/000/229_1.jpg,train,False,lamp
+231,1,0,8,/data/dreamsim_100/ref/000/231.jpg,/data/dreamsim_100/distort/000/231_1.jpg,/data/dreamsim_100/distort/000/231_0.jpg,test,True,bib
+232,1,0,7,/data/dreamsim_100/ref/000/232.jpg,/data/dreamsim_100/distort/000/232_1.jpg,/data/dreamsim_100/distort/000/232_0.jpg,train,True,pop bottle
+234,0,1,7,/data/dreamsim_100/ref/000/234.jpg,/data/dreamsim_100/distort/000/234_0.jpg,/data/dreamsim_100/distort/000/234_1.jpg,train,True,rhinoceros beetle
+246,1,0,8,/data/dreamsim_100/ref/000/246.jpg,/data/dreamsim_100/distort/000/246_0.jpg,/data/dreamsim_100/distort/000/246_1.jpg,train,False,hotel room
+252,1,0,6,/data/dreamsim_100/ref/000/252.jpg,/data/dreamsim_100/distort/000/252_1.jpg,/data/dreamsim_100/distort/000/252_0.jpg,val,True,rubber eraser
+256,0,1,8,/data/dreamsim_100/ref/000/256.jpg,/data/dreamsim_100/distort/000/256_0.jpg,/data/dreamsim_100/distort/000/256_1.jpg,train,False,drugstore
+260,0,1,8,/data/dreamsim_100/ref/000/260.jpg,/data/dreamsim_100/distort/000/260_0.jpg,/data/dreamsim_100/distort/000/260_1.jpg,train,False,poolroom establishment
+264,1,0,8,/data/dreamsim_100/ref/000/264.jpg,/data/dreamsim_100/distort/000/264_1.jpg,/data/dreamsim_100/distort/000/264_0.jpg,val,True,meat loaf
+266,0,1,7,/data/dreamsim_100/ref/000/266.jpg,/data/dreamsim_100/distort/000/266_0.jpg,/data/dreamsim_100/distort/000/266_1.jpg,train,True,soft-coated wheaten terrier
+285,1,0,7,/data/dreamsim_100/ref/000/285.jpg,/data/dreamsim_100/distort/000/285_0.jpg,/data/dreamsim_100/distort/000/285_1.jpg,train,True,cab
+288,1,0,5,/data/dreamsim_100/ref/000/288.jpg,/data/dreamsim_100/distort/000/288_1.jpg,/data/dreamsim_100/distort/000/288_0.jpg,train,True,tow truck
+293,0,1,9,/data/dreamsim_100/ref/000/293.jpg,/data/dreamsim_100/distort/000/293_1.jpg,/data/dreamsim_100/distort/000/293_0.jpg,train,False,ruin
+298,1,0,7,/data/dreamsim_100/ref/000/298.jpg,/data/dreamsim_100/distort/000/298_1.jpg,/data/dreamsim_100/distort/000/298_0.jpg,train,True,computer keyboard
+302,1,0,7,/data/dreamsim_100/ref/000/302.jpg,/data/dreamsim_100/distort/000/302_0.jpg,/data/dreamsim_100/distort/000/302_1.jpg,train,True,lacewing
+307,0,1,7,/data/dreamsim_100/ref/000/307.jpg,/data/dreamsim_100/distort/000/307_1.jpg,/data/dreamsim_100/distort/000/307_0.jpg,train,True,submarine
+311,0,1,7,/data/dreamsim_100/ref/000/311.jpg,/data/dreamsim_100/distort/000/311_0.jpg,/data/dreamsim_100/distort/000/311_1.jpg,val,False,stemless gentian
+312,0,1,8,/data/dreamsim_100/ref/000/312.jpg,/data/dreamsim_100/distort/000/312_0.jpg,/data/dreamsim_100/distort/000/312_1.jpg,train,True,gibbon
+318,1,0,8,/data/dreamsim_100/ref/000/318.jpg,/data/dreamsim_100/distort/000/318_1.jpg,/data/dreamsim_100/distort/000/318_0.jpg,train,True,European gallinule
+326,1,0,5,/data/dreamsim_100/ref/000/326.jpg,/data/dreamsim_100/distort/000/326_1.jpg,/data/dreamsim_100/distort/000/326_0.jpg,train,False,forest road
+328,1,0,8,/data/dreamsim_100/ref/000/328.jpg,/data/dreamsim_100/distort/000/328_0.jpg,/data/dreamsim_100/distort/000/328_1.jpg,train,True,sea snake
+329,0,1,7,/data/dreamsim_100/ref/000/329.jpg,/data/dreamsim_100/distort/000/329_0.jpg,/data/dreamsim_100/distort/000/329_1.jpg,train,False,volleyball court outdoor
+338,1,0,9,/data/dreamsim_100/ref/000/338.jpg,/data/dreamsim_100/distort/000/338_0.jpg,/data/dreamsim_100/distort/000/338_1.jpg,train,False,living room
+342,0,1,6,/data/dreamsim_100/ref/000/342.jpg,/data/dreamsim_100/distort/000/342_1.jpg,/data/dreamsim_100/distort/000/342_0.jpg,train,True,picket fence
+344,1,0,7,/data/dreamsim_100/ref/000/344.jpg,/data/dreamsim_100/distort/000/344_1.jpg,/data/dreamsim_100/distort/000/344_0.jpg,val,True,rocking chair
+349,1,0,5,/data/dreamsim_100/ref/000/349.jpg,/data/dreamsim_100/distort/000/349_0.jpg,/data/dreamsim_100/distort/000/349_1.jpg,train,False,courtyard
+350,0,1,9,/data/dreamsim_100/ref/000/350.jpg,/data/dreamsim_100/distort/000/350_0.jpg,/data/dreamsim_100/distort/000/350_1.jpg,train,False,baseball field
+365,1,0,8,/data/dreamsim_100/ref/000/365.jpg,/data/dreamsim_100/distort/000/365_0.jpg,/data/dreamsim_100/distort/000/365_1.jpg,train,True,chiton
+368,1,0,6,/data/dreamsim_100/ref/000/368.jpg,/data/dreamsim_100/distort/000/368_0.jpg,/data/dreamsim_100/distort/000/368_1.jpg,train,True,bib
+371,0,1,7,/data/dreamsim_100/ref/000/371.jpg,/data/dreamsim_100/distort/000/371_0.jpg,/data/dreamsim_100/distort/000/371_1.jpg,train,False,bolero deep blue
+375,1,0,10,/data/dreamsim_100/ref/000/375.jpg,/data/dreamsim_100/distort/000/375_1.jpg,/data/dreamsim_100/distort/000/375_0.jpg,train,True,toilet seat
+377,0,1,9,/data/dreamsim_100/ref/000/377.jpg,/data/dreamsim_100/distort/000/377_0.jpg,/data/dreamsim_100/distort/000/377_1.jpg,train,False,wave
+385,0,1,5,/data/dreamsim_100/ref/000/385.jpg,/data/dreamsim_100/distort/000/385_1.jpg,/data/dreamsim_100/distort/000/385_0.jpg,train,False,gymnasium indoor
+387,0,1,7,/data/dreamsim_100/ref/000/387.jpg,/data/dreamsim_100/distort/000/387_1.jpg,/data/dreamsim_100/distort/000/387_0.jpg,train,False,schoolhouse
+398,1,0,7,/data/dreamsim_100/ref/000/398.jpg,/data/dreamsim_100/distort/000/398_1.jpg,/data/dreamsim_100/distort/000/398_0.jpg,train,True,jersey
+402,1,0,7,/data/dreamsim_100/ref/000/402.jpg,/data/dreamsim_100/distort/000/402_1.jpg,/data/dreamsim_100/distort/000/402_0.jpg,train,False,cape flower
+403,0,1,7,/data/dreamsim_100/ref/000/403.jpg,/data/dreamsim_100/distort/000/403_0.jpg,/data/dreamsim_100/distort/000/403_1.jpg,train,False,golf course
+404,0,1,6,/data/dreamsim_100/ref/000/404.jpg,/data/dreamsim_100/distort/000/404_1.jpg,/data/dreamsim_100/distort/000/404_0.jpg,train,False,control tower outdoor
+406,0,1,8,/data/dreamsim_100/ref/000/406.jpg,/data/dreamsim_100/distort/000/406_1.jpg,/data/dreamsim_100/distort/000/406_0.jpg,train,False,creme brulee
+411,0,1,8,/data/dreamsim_100/ref/000/411.jpg,/data/dreamsim_100/distort/000/411_1.jpg,/data/dreamsim_100/distort/000/411_0.jpg,train,True,streetcar
+416,1,0,7,/data/dreamsim_100/ref/000/416.jpg,/data/dreamsim_100/distort/000/416_1.jpg,/data/dreamsim_100/distort/000/416_0.jpg,train,True,limousine
+417,0,1,3,/data/dreamsim_100/ref/000/417.jpg,/data/dreamsim_100/distort/000/417_0.jpg,/data/dreamsim_100/distort/000/417_1.jpg,train,False,burial chamber
+424,0,1,8,/data/dreamsim_100/ref/000/424.jpg,/data/dreamsim_100/distort/000/424_1.jpg,/data/dreamsim_100/distort/000/424_0.jpg,train,True,cardigan
+427,1,0,7,/data/dreamsim_100/ref/000/427.jpg,/data/dreamsim_100/distort/000/427_0.jpg,/data/dreamsim_100/distort/000/427_1.jpg,train,True,steam locomotive
+435,0,1,5,/data/dreamsim_100/ref/000/435.jpg,/data/dreamsim_100/distort/000/435_0.jpg,/data/dreamsim_100/distort/000/435_1.jpg,test,False,dinette home
+438,0,1,8,/data/dreamsim_100/ref/000/438.jpg,/data/dreamsim_100/distort/000/438_0.jpg,/data/dreamsim_100/distort/000/438_1.jpg,train,True,beaver
+441,1,0,7,/data/dreamsim_100/ref/000/441.jpg,/data/dreamsim_100/distort/000/441_0.jpg,/data/dreamsim_100/distort/000/441_1.jpg,train,True,coyote
+443,0,1,8,/data/dreamsim_100/ref/000/443.jpg,/data/dreamsim_100/distort/000/443_0.jpg,/data/dreamsim_100/distort/000/443_1.jpg,val,True,Tibetan mastiff
+446,1,0,9,/data/dreamsim_100/ref/000/446.jpg,/data/dreamsim_100/distort/000/446_0.jpg,/data/dreamsim_100/distort/000/446_1.jpg,train,True,dalmatian
+448,0,1,7,/data/dreamsim_100/ref/000/448.jpg,/data/dreamsim_100/distort/000/448_1.jpg,/data/dreamsim_100/distort/000/448_0.jpg,test,True,birdhouse
+450,1,0,8,/data/dreamsim_100/ref/000/450.jpg,/data/dreamsim_100/distort/000/450_1.jpg,/data/dreamsim_100/distort/000/450_0.jpg,train,True,cannon
+457,0,1,6,/data/dreamsim_100/ref/000/457.jpg,/data/dreamsim_100/distort/000/457_1.jpg,/data/dreamsim_100/distort/000/457_0.jpg,train,True,croquet ball
+463,0,1,7,/data/dreamsim_100/ref/000/463.jpg,/data/dreamsim_100/distort/000/463_0.jpg,/data/dreamsim_100/distort/000/463_1.jpg,train,True,trilobite
+468,1,0,7,/data/dreamsim_100/ref/000/468.jpg,/data/dreamsim_100/distort/000/468_1.jpg,/data/dreamsim_100/distort/000/468_0.jpg,train,True,pool table
+471,0,1,4,/data/dreamsim_100/ref/000/471.jpg,/data/dreamsim_100/distort/000/471_1.jpg,/data/dreamsim_100/distort/000/471_0.jpg,train,False,lighthouse
+482,1,0,8,/data/dreamsim_100/ref/000/482.jpg,/data/dreamsim_100/distort/000/482_0.jpg,/data/dreamsim_100/distort/000/482_1.jpg,train,True,capuchin
+484,1,0,8,/data/dreamsim_100/ref/000/484.jpg,/data/dreamsim_100/distort/000/484_1.jpg,/data/dreamsim_100/distort/000/484_0.jpg,train,False,tennis court outdoor
+488,1,0,9,/data/dreamsim_100/ref/000/488.jpg,/data/dreamsim_100/distort/000/488_0.jpg,/data/dreamsim_100/distort/000/488_1.jpg,test,False,sashimi
+495,1,0,9,/data/dreamsim_100/ref/000/495.jpg,/data/dreamsim_100/distort/000/495_1.jpg,/data/dreamsim_100/distort/000/495_0.jpg,train,True,bonnet
+497,1,0,7,/data/dreamsim_100/ref/000/497.jpg,/data/dreamsim_100/distort/000/497_1.jpg,/data/dreamsim_100/distort/000/497_0.jpg,train,True,frying pan
+498,0,1,8,/data/dreamsim_100/ref/000/498.jpg,/data/dreamsim_100/distort/000/498_0.jpg,/data/dreamsim_100/distort/000/498_1.jpg,train,False,pavilion

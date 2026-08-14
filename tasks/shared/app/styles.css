@@ -1,0 +1,46 @@
+:root { color: #1c1c1c; background: #e7e7e7; font-family: Arial, Helvetica, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+button { font: inherit; }
+#app, .jspsych-display-element, .jspsych-content-wrapper { min-height: 100vh; }
+.jspsych-content-wrapper { display: grid; place-items: center; }
+.vs-card, .vs-viewport-required { width: 640px; margin: 0 auto; padding: 32px; border: 1px solid #9b9b9b; background: #fff; color: #1c1c1c; line-height: 1.5; }
+.vs-eyebrow { margin: 0 0 8px; color: #555; text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; font-weight: 700; }
+.vs-card h1, .vs-viewport-required h1 { margin: 0 0 16px; font-size: 1.75rem; line-height: 1.2; }
+.vs-primary, .vs-secondary { cursor: pointer; padding: 10px 16px; border: 1px solid #555; border-radius: 0; background: #fff; color: #1c1c1c; font-weight: 600; }
+.vs-primary:hover, .vs-secondary:hover { background: #f0f0f0; }
+.vs-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.vs-loading, .vs-feedback { display: grid; place-items: center; min-height: 100vh; color: #1c1c1c; font-size: 1.1rem; }
+.vs-feedback { font-weight: 700; }
+.vs-feedback.is-correct { color: #1e7a36; }
+.vs-feedback.is-incorrect { color: #a32b2b; }
+.vs-feedback.om-feedback-correct, .vs-feedback.om-feedback-incorrect { font-size: 2.4rem; font-weight: 700; }
+.vs-feedback.om-feedback-correct { color: #1e7a36; }
+.vs-feedback.om-feedback-incorrect { color: #a32b2b; }
+.vs-trial { position: relative; width: 1080px; height: 675px; min-height: 675px; overflow: hidden; border: 1px solid #9b9b9b; background: #fff; color: #1c1c1c; }
+.vs-progress { position: absolute; z-index: 2; top: 12px; left: 24px; right: 24px; display: grid; gap: 12px; color: #444; font-size: .8rem; line-height: 1; }
+.vs-progress > div { height: 1px; overflow: hidden; background: #c8c8c8; }.vs-progress i { display: block; height: 100%; background: #4c4c4c; }
+.vs-stimulus-row { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 220px); column-gap: 100px; place-content: center; }
+.vs-stimulus-item { position: relative; width: 220px; height: 220px; margin: 0; }
+.vs-image-frame { width: 220px; height: 220px; margin: 0; border: 1px solid #9b9b9b; background: #fff; }
+.vs-image-frame { display: grid; place-items: center; padding: 0; overflow: hidden; }
+.vs-image-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.vs-reference .vs-image-frame { border: 3px solid #1c1c1c; }
+.vs-candidate { cursor: pointer; }
+.vs-candidate:hover { border: 4px solid #8a8a8a; }
+.vs-candidate:focus-visible { outline: 2px solid #1c1c1c; outline-offset: 3px; }
+.vs-stimulus-label { position: absolute; top: calc(100% + 10px); left: 0; width: 100%; margin: 0; color: #444; font-size: .85rem; font-weight: 700; text-align: center; }
+.vs-cross-slot { position: absolute; top: 50%; left: 50%; display: grid; width: 40px; height: 40px; place-items: center; transform: translate(-50%, -50%); }
+.vs-cross { width: 40px; height: 40px; border: 0; background: transparent; color: #1c1c1c; font-size: 2.25rem; cursor: pointer; }
+.om-stimulus-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 160px); grid-template-rows: repeat(3, 160px); column-gap: 120px; row-gap: 40px; place-content: center; }
+.om-stimulus-item { position: relative; display: grid; width: 160px; height: 160px; margin: 0; place-items: start center; }
+.om-image-frame { display: grid; margin: 0; padding: 0; overflow: hidden; border: 1px solid #9b9b9b; background: #fff; place-items: center; }
+.om-image-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.om-candidate { width: 160px; height: 160px; cursor: pointer; }
+.om-candidate:hover { border: 4px solid #8a8a8a; }
+.om-candidate:focus-visible { outline: 2px solid #1c1c1c; outline-offset: 3px; }
+.om-reference .om-image-frame { width: 160px; height: 160px; }
+.om-cross-slot { position: absolute; top: 50%; left: 50%; display: grid; width: 40px; height: 40px; place-items: center; transform: translate(-50%, -50%); }
+.om-cross { width: 40px; height: 40px; border: 0; background: transparent; color: #1c1c1c; font-size: 2.25rem; cursor: pointer; }
+.om-reference .om-image-frame { border: 3px solid #1c1c1c; }
+.om-stimulus-label { position: absolute; top: calc(100% + 6px); left: 0; width: 100%; margin: 0; color: #444; font-size: .8rem; font-weight: 700; text-align: center; }
