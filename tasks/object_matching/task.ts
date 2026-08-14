@@ -92,7 +92,7 @@ export function selectObjectMatchingRunPhases(
   mode: ObjectMatchingRunMode,
 ): ObjectMatchingTrialPhases {
   return mode === "development"
-    ? { training: phases.training.slice(0, 3), testing: phases.testing.slice(0, 3) }
+    ? { training: phases.training.slice(0, 3), testing: phases.testing.slice(0, 10) }
     : phases;
 }
 

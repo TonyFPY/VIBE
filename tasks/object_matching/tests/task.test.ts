@@ -45,13 +45,13 @@ describe("object matching task", () => {
     expect(trial.candidates[0]).toBe("/data/rs_imagenet_100/distractor/frog/7-0.jpg");
   });
 
-  it("uses three training rows and limits development mode to three testing rows", () => {
-    const trials = parseObjectMatchingCsv(`${header}\n${Array.from({ length: 9 }, (_, index) => row(index)).join("\n")}`);
+  it("uses three training rows and limits development mode to ten testing rows", () => {
+    const trials = parseObjectMatchingCsv(`${header}\n${Array.from({ length: 15 }, (_, index) => row(index)).join("\n")}`);
     const phases = splitObjectMatchingPhases(trials);
 
     expect(phases.training).toHaveLength(3);
-    expect(phases.testing).toHaveLength(6);
-    expect(selectObjectMatchingRunPhases(phases, "development").testing).toHaveLength(3);
+    expect(phases.testing).toHaveLength(12);
+    expect(selectObjectMatchingRunPhases(phases, "development").testing).toHaveLength(10);
     expect(selectObjectMatchingRunPhases(phases, "full")).toEqual(phases);
   });
 

@@ -28,7 +28,7 @@ trial_id,class_name,reference,candidate_0,...,candidate_7,correct_label
 candidate. Preserve `trial_id`, otherwise preserve `csv_row_index`.
 
 Rows `0–2` are training; rows `3+` are testing. `mode=development` selects
-the first 3 training and first 3 testing trials. Omit the mode, or use any
+the first 3 training and first 10 testing trials. Omit the mode, or use any
 other value, for the complete run.
 
 ## Run Identity and Commands
@@ -51,7 +51,7 @@ npm run build
 ```
 
 ```text
-# Human developer test: 3 training + 3 testing trials
+# Human developer test: 3 training + 10 testing trials
 http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=dev-tony&mode=development
 
 # Human full run

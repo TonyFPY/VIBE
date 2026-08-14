@@ -26,7 +26,7 @@ tasks/shared/app/styles.css               fixed psychophysics canvas and neutral
 ```
 
 The route is `/tasks/visual-similarity`. `mode=development` selects exactly
-the first 3 training and first 3 testing trials. Any other mode, including no
+the first 3 training and first 10 testing trials. Any other mode, including no
 mode parameter, uses all testing rows. Human and agent sessions share the same
 timeline, renderer, stimuli, response mapping, and persistence schema.
 
@@ -59,7 +59,7 @@ npm run build               # type-check and create a production build
 Open one of these URLs after `npm run dev`:
 
 ```text
-# Developer testing: 3 training + 3 testing trials
+# Developer testing: 3 training + 10 testing trials
 http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=dev-tony&mode=development
 
 # Human participant: full run
@@ -69,7 +69,7 @@ http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=P001
 http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=gpt-5&agent_name=codex&mode=development
 ```
 
-`mode=development` selects the first three training and first three testing
+`mode=development` selects the first three training and first ten testing
 trials. Omit it for the full run. Without a results API, failed final
 submissions remain in browser recovery storage and expose JSON downloads.
 

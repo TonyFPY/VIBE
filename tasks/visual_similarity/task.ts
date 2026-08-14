@@ -66,7 +66,7 @@ export function parseDreamSimCsv(csv: string): DreamSimTrial[] {
 export const splitExperimentPhases = (trials: DreamSimTrial[]): TrialPhases => ({ training: trials.slice(0, 3), testing: trials.slice(3) });
 export function selectRunPhases(phases: TrialPhases, mode: RunMode): TrialPhases {
   return mode === "development"
-    ? { training: phases.training.slice(0, 3), testing: phases.testing.slice(0, 3) }
+    ? { training: phases.training.slice(0, 3), testing: phases.testing.slice(0, 10) }
     : phases;
 }
 export const scoreResponse = (selectedSide: Side, correctSide: Side) => selectedSide === correctSide;

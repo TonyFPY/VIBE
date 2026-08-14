@@ -31,16 +31,16 @@ describe("visual similarity task", () => {
     expect(phases.testing[0].id).toBe("4");
   });
 
-  it("limits development mode to three training and three testing trials", () => {
+  it("limits development mode to three training and ten testing trials", () => {
     const rows = parseDreamSimCsv(
       "id,left_vote,right_vote,ref_path,left_path,right_path\n" +
-        Array.from({ length: 8 }, (_, index) => `${index + 1},1,0,ref/${index}.png,left/${index}.png,right/${index}.png`).join("\n"),
+        Array.from({ length: 15 }, (_, index) => `${index + 1},1,0,ref/${index}.png,left/${index}.png,right/${index}.png`).join("\n"),
     );
     const phases = splitExperimentPhases(rows);
 
     expect(selectRunPhases(phases, "development")).toEqual({
       training: phases.training.slice(0, 3),
-      testing: phases.testing.slice(0, 3),
+      testing: phases.testing.slice(0, 10),
     });
     expect(selectRunPhases(phases, "full")).toEqual(phases);
   });
