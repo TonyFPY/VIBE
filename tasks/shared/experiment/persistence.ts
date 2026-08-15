@@ -1,5 +1,15 @@
 import type { SessionPayload } from "./types";
 
+const defaultResultsEndpoint = "/api/experiments/sessions";
+
+export function resultsEndpoint(
+  environment: Record<string, string | undefined> = (
+    import.meta as ImportMeta & { env: Record<string, string | undefined> }
+  ).env,
+): string {
+  return environment.VITE_RESULTS_ENDPOINT?.trim() || defaultResultsEndpoint;
+}
+
 const storageKey = (sessionId: string) => `visual-similarity:${sessionId}`;
 
 export function saveRecovery(payload: SessionPayload): void {
@@ -10,7 +20,7 @@ export function clearRecovery(sessionId: string): void {
   localStorage.removeItem(storageKey(sessionId));
 }
 
-export async function submitSession(payload: SessionPayload, endpoint = "/api/experiments/sessions"): Promise<void> {
+export async function submitSession(payload: SessionPayload, endpoint = resultsEndpoint()): Promise<void> {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": payload.session.sessionId },
