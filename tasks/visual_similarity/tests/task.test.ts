@@ -45,6 +45,18 @@ describe("visual similarity task", () => {
     expect(selectRunPhases(phases, "full")).toEqual(phases);
   });
 
+  it("uses no training trials and one testing trial for local trace smoke", () => {
+    const rows = parseDreamSimCsv(
+      "id,left_vote,right_vote,ref_path,left_path,right_path\n" +
+        Array.from({ length: 5 }, (_, index) => `${index + 1},1,0,ref/${index}.png,left/${index}.png,right/${index}.png`).join("\n"),
+    );
+
+    expect(selectRunPhases(splitExperimentPhases(rows), "trace-smoke")).toEqual({
+      training: [],
+      testing: [rows[3]],
+    });
+  });
+
   it("scores a selected candidate against the private target side", () => {
     expect(scoreResponse("left", "left")).toBe(true);
     expect(scoreResponse("right", "left")).toBe(false);
@@ -132,6 +144,43 @@ describe("visual similarity task", () => {
     ]);
     expect(Array.from(display.querySelectorAll(".vs-stimulus-label"), (label) => label.textContent)).toEqual([
       "reference",
+    ]);
+  });
+
+  it("records post-fixation pointer moves in the existing trajectory callback", async () => {
+    Object.defineProperties(window, {
+      innerWidth: { configurable: true, value: 1080 },
+      innerHeight: { configurable: true, value: 675 },
+    });
+    const plugin = new VisualSimilarityPlugin({ finishTrial: () => undefined } as never);
+    const [trial] = parseDreamSimCsv("id,left_vote,right_vote,ref_path,left_path,right_path\n1,1,0,ref/a.png,left/a.png,right/a.png");
+    const display = document.createElement("div");
+    let recorded: Array<{ xRaw: number; yRaw: number }> = [];
+
+    plugin.trial(display, {
+      trial,
+      phase: "testing",
+      trialNumber: 1,
+      totalInPhase: 1,
+      prepare: () => Promise.resolve(),
+      onComplete: (_result, points) => { recorded = points; },
+    });
+    await Promise.resolve();
+    display.querySelector<HTMLButtonElement>(".vs-cross")?.click();
+    const trialArea = display.querySelector<HTMLElement>(".vs-trial")!;
+    trialArea.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: 1080, height: 675,
+      right: 1080, bottom: 675, x: 0, y: 0, toJSON: () => undefined,
+    });
+    trialArea.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 600, clientY: 338 }));
+    trialArea.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 800, clientY: 338 }));
+    display.querySelector<HTMLButtonElement>(".vs-candidate")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, clientX: 800, clientY: 338 }),
+    );
+
+    expect(recorded.map(({ xRaw, yRaw }) => ({ xRaw, yRaw }))).toEqual([
+      { xRaw: 600, yRaw: 338 },
+      { xRaw: 800, yRaw: 338 },
     ]);
   });
 

@@ -22,7 +22,8 @@ import "./styles.css";
 
 const root = document.querySelector<HTMLElement>("#app")!;
 const identity = createSessionIdentity();
-const runMode = new URLSearchParams(window.location.search).get("mode") === "development" ? "development" : "full";
+const requestedMode = new URLSearchParams(window.location.search).get("mode");
+const runMode = requestedMode === "development" || requestedMode === "trace-smoke" ? requestedMode : "full";
 const isObjectMatchingRoute = window.location.pathname === "/tasks/object-matching";
 document.title = isObjectMatchingRoute ? "Object Matching" : "Visual Similarity";
 const results: ExperimentTrialResult[] = [];

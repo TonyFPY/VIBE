@@ -27,8 +27,6 @@ Thumbs.db
 
 # Local experiment recovery and downloaded result files
 .superpowers/
-results/
-trajectories/
 
 # Ignore all original source-dataset files. Deployable subsets remain tracked.
 data/dreamsim/
