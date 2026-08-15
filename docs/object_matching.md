@@ -15,9 +15,10 @@ Current implementation files are `tasks/object_matching/task.ts`,
 
 ## Data
 
-Load `data/rs_imagenet_100/data_web_100.csv`. Generate it from
+Load `/data/rs_imagenet_100/data_web_100.csv`. Generate it from
 `data/rs_imagenet/data_100.csv` with `data/rs_imagenet/prepare_web_subset.py`;
-it references the selected, unmodified JPEGs under `data/rs_imagenet_100/`.
+it references selected, unmodified JPEGs under
+`public/data/rs_imagenet_100/`.
 Each row is:
 
 ```text
@@ -62,8 +63,9 @@ http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model
 ```
 
 Run the subset command before deployment or after changing `data_100.csv`.
-The development server maps `/data/rs_imagenet_100/...` to this local folder;
-production hosting must publish the folder at the same URL.
+It writes the selected subset to `public/data/rs_imagenet_100/`; Vite serves
+those files at `/data/rs_imagenet_100/...` locally and copies them to the
+production build at the same URL.
 
 ## Participant Flow
 

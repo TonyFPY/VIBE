@@ -1,6 +1,7 @@
 import { initJsPsych } from "jspsych";
 import "jspsych/css/jspsych.css";
 
+import { parseLaunch } from "./launch";
 import { createSessionIdentity } from "../experiment/session";
 import { clearRecovery, saveRecovery, submitSession } from "../experiment/persistence";
 import { isRecordedPhase, type ExperimentTrialResult, type ObjectMatchingTrialResult, type SessionPayload, type TrajectoryPoint, type TrialResult } from "../experiment/types";
@@ -14,18 +15,22 @@ import {
   parseObjectMatchingCsv,
   selectObjectMatchingRunPhases,
   splitObjectMatchingPhases,
+  type ObjectMatchingRunMode,
   type ObjectMatchingTrial,
 } from "../../object_matching/task";
 import { InstructionPlugin, TestReadyPlugin, VisualSimilarityPlugin } from "../../visual_similarity/renderer";
-import { parseDreamSimCsv, selectRunPhases, splitExperimentPhases, TripletPreloadBuffer, type DreamSimTrial } from "../../visual_similarity/task";
+import {
+  parseDreamSimCsv,
+  selectRunPhases,
+  splitExperimentPhases,
+  TripletPreloadBuffer,
+  type DreamSimTrial,
+  type RunMode,
+} from "../../visual_similarity/task";
 import "./styles.css";
 
 const root = document.querySelector<HTMLElement>("#app")!;
 const identity = createSessionIdentity();
-const requestedMode = new URLSearchParams(window.location.search).get("mode");
-const runMode = requestedMode === "development" || requestedMode === "trace-smoke" ? requestedMode : "full";
-const isObjectMatchingRoute = window.location.pathname === "/tasks/object-matching";
-document.title = isObjectMatchingRoute ? "Object Matching" : "Visual Similarity";
 const results: ExperimentTrialResult[] = [];
 const trajectories: TrajectoryPoint[] = [];
 
@@ -99,7 +104,7 @@ function objectMatchingTimelineFor(phase: "training" | "testing", trials: Object
   }));
 }
 
-async function startVisualSimilarity(): Promise<void> {
+async function startVisualSimilarity(runMode: RunMode): Promise<void> {
   const response = await fetch("/data/dreamsim_100/data_100_web.csv");
   if (!response.ok) throw new Error("The trial dataset could not be loaded.");
   const phases = selectRunPhases(splitExperimentPhases(parseDreamSimCsv(await response.text())), runMode);
@@ -112,7 +117,7 @@ async function startVisualSimilarity(): Promise<void> {
   ]);
 }
 
-async function startObjectMatching(): Promise<void> {
+async function startObjectMatching(runMode: ObjectMatchingRunMode): Promise<void> {
   const response = await fetch("/data/rs_imagenet_100/data_web_100.csv");
   if (!response.ok) throw new Error("The object-matching trial dataset could not be loaded.");
   const phases = selectObjectMatchingRunPhases(
@@ -128,8 +133,15 @@ async function startObjectMatching(): Promise<void> {
   ]);
 }
 
-const start = isObjectMatchingRoute
-  ? startObjectMatching
-  : startVisualSimilarity;
+async function start(): Promise<void> {
+  const launch = parseLaunch(window.location.pathname, window.location.search);
+  if (launch.task === "object-matching") {
+    document.title = "Object Matching";
+    await startObjectMatching(launch.runMode);
+    return;
+  }
+  document.title = "Visual Similarity";
+  await startVisualSimilarity(launch.runMode);
+}
 
 void start().catch((error: unknown) => showError(error instanceof Error ? error.message : "Unexpected startup failure."));

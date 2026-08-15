@@ -16,7 +16,11 @@
 - Default submission remains `POST /api/experiments/sessions` with `Idempotency-Key: <session_id>`.
 - Do not add Firebase SDK code, cloud credentials, paid services, or provider-specific browser code.
 - Keep `npm run dev` local results persistence; do not touch the user’s stylesheet edit.
+<<<<<<< HEAD
 - Do not expose private trial values or agent-boundary internals in new browser-facing configuration.
+=======
+- The visual agent model receives screenshots and public instructions only; browser assets and private client state must not be passed into model observations, prompts, URLs, filenames, or tool interfaces.
+>>>>>>> feat/portable-deployment
 
 ---
 
@@ -410,9 +414,15 @@ Stop Vite after the smoke check. Complete a development run only if required to 
 
 - [ ] **Step 4: Check scope and leakage**
 
+<<<<<<< HEAD
 Run: `git diff --check && rg -n "SECRET_ANSWER_CANARY|correctLabel|correctSide|firebaseConfig|apiKey" firebase.json netlify.toml vercel.json docs README.md tasks/shared/app tasks/shared/experiment`
 
 Expected: no whitespace errors, credentials, or answer keys in hosting/launch/persistence additions.
+=======
+Run: `git diff --check && rg -n "firebaseConfig|apiKey" firebase.json netlify.toml vercel.json docs README.md tasks/shared/app tasks/shared/experiment`
+
+Expected: no whitespace errors or credentials; model-facing observations, prompts, URLs, filenames, and tool interfaces continue to omit answer keys and private state.
+>>>>>>> feat/portable-deployment
 
 - [ ] **Step 5: Commit only a necessary final documentation correction**
 

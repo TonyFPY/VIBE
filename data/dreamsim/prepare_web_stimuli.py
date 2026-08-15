@@ -13,7 +13,11 @@ from tqdm import tqdm
 DATA_DIR = Path(__file__).parent
 DEFAULT_CSV_PATH = DATA_DIR / "data_100.csv"
 DEFAULT_SOURCE_ROOT = DATA_DIR
+<<<<<<< HEAD
 DEFAULT_OUTPUT_ROOT = DATA_DIR.parent / "dreamsim_100"
+=======
+DEFAULT_OUTPUT_ROOT = DATA_DIR.parent.parent / "public" / "data" / "dreamsim_100"
+>>>>>>> feat/portable-deployment
 DEFAULT_OUTPUT_CSV_PATH = DEFAULT_OUTPUT_ROOT / "data_100_web.csv"
 PATH_COLUMNS = ("ref_path", "left_path", "right_path")
 PUBLIC_ASSET_PREFIX = "/data/dreamsim_100"
