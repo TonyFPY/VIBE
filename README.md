@@ -22,13 +22,13 @@ The local site is then available at `http://127.0.0.1:5173`.
 ## Human testing
 
 Open one of these URLs in a normal browser. Development mode is exactly three
-training trials followed by ten testing trials. Omit `mode=development` for a
+training trials followed by ten testing trials. Omit `run=development` for a
 full session.
 
 | Task | Development run | Full run |
 | --- | --- | --- |
-| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=dev-human&mode=development` | `http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=P001` |
-| Object matching | `http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=dev-human&mode=development` | `http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=P001` |
+| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=dev-human&run=development` | `http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=P001` |
+| Object matching | `http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=dev-human&run=development` | `http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=P001` |
 
 ## Agent testing
 
@@ -38,8 +38,8 @@ source-code access.
 
 | Task | Development URL | Full-run URL |
 | --- | --- | --- |
-| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=gpt-5&agent_name=codex&mode=development` | `http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=gpt-5&agent_name=codex` |
-| Object matching | `http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=gpt-5&agent_name=codex&mode=development` | `http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=gpt-5&agent_name=codex` |
+| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=gpt-5&agent_name=codex&run=development` | `http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=gpt-5&agent_name=codex` |
+| Object matching | `http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=gpt-5&agent_name=codex&run=development` | `http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=gpt-5&agent_name=codex` |
 
 The website records testing cursor trajectories and saves them through the same
 session payload for humans and agents. See [website cursor trajectories](docs/agent_cursor_tracing.md).
@@ -55,7 +55,7 @@ testing trajectories through the same path used for human sessions.
 ```text
 Open this local experiment URL:
 
-http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=codex&agent_name=codex-chat&mode=development
+http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=codex&agent_name=codex-chat&run=development
 
 Complete the visible experiment using computer-use interaction only.
 
@@ -76,7 +76,7 @@ Rules:
 ```text
 Open this local experiment URL:
 
-http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=codex&agent_name=codex-chat&mode=development
+http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=codex&agent_name=codex-chat&run=development
 
 Complete the visible experiment using computer-use interaction only.
 
@@ -98,3 +98,8 @@ Rules:
 npm test
 npm run build
 ```
+
+## Deployment
+
+See [deployment](docs/deployment.md) for static-host rewrites, results API
+configuration, access controls, and the screenshot-only agent boundary.
