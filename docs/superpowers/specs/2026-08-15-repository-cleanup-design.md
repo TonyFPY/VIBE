@@ -54,12 +54,23 @@ Never delete source datasets in `data/dreamsim/` or `data/rs_imagenet/`,
 experiment records in `results/`, or an unmatched file. If comparison fails,
 leave both directories intact and report the difference.
 
+The verified old generated directories contain only three macOS metadata files
+and no datasets: `data/dreamsim_100/.DS_Store`,
+`data/dreamsim_100/distort/.DS_Store`, and
+`data/rs_imagenet_100/.DS_Store`. Remove only these files and their now-empty
+directories.
+
 ## Local Development Hygiene
 
 Add `.worktrees/` to `.gitignore` so isolated Git worktrees are not shown as
 untracked repository content. Preserve all existing uncommitted renderer,
 test, and documentation changes; this cleanup must not stage, move, or alter
 them.
+
+The merged and clean `feat/portable-deployment` worktree at
+`.worktrees/portable-deployment` is obsolete. Remove it using `git worktree
+remove` before running the final local test suite, so Vitest does not discover
+and execute a second checkout's tests.
 
 ## Verification
 
