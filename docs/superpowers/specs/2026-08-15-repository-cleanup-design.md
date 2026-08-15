@@ -6,6 +6,10 @@ Make the merged repository easier to navigate while preserving experiment
 records, keeping deployment assets separate from results, and reclaiming the
 local disk space used by obsolete generated dataset duplicates.
 
+The cleanup is non-functional: it must not change any human or agent task,
+URL, renderer, response mapping, local-development behavior, or Firebase
+Hosting behavior.
+
 ## Results Records
 
 Keep experiment records under their current Git-tracked structure:
@@ -63,3 +67,11 @@ Add tests or build checks confirming `results/` is absent from `dist`, existing
 task tests still pass, and the two public manifests exist after build. Record
 the pre-deletion checksum comparison in a non-versioned command log or report;
 do not commit source-data hashes as a replacement for the research records.
+
+Before deleting duplicates, run the current full test suite and production
+build. After deletion, run the same full test suite and build again, then
+verify that `dist` contains both public task manifests and no `dist/results`
+directory. Start the local Vite server and load both canonical task URLs to
+confirm their instruction screens load without manifest errors. These checks
+establish that Firebase Hosting continues to deploy the same `dist` output and
+that local testing continues to use the same public asset URLs.
