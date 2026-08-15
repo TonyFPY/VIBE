@@ -149,6 +149,16 @@ export class VisualSimilarityPlugin {
         ...normalized,
       });
     };
+    if (parameters.phase === "testing") {
+      const rectangle = trialArea.getBoundingClientRect();
+      trajectories.push({
+        trialId: parameters.trial.id,
+        sampleIndex: trajectories.length,
+        timestamp: timing.crossClickedAt,
+        elapsedMsFromCrossClick: 0,
+        ...normalizePointer({ x: timing.crossClickX, y: timing.crossClickY }, rectangle),
+      });
+    }
     trialArea.addEventListener("pointermove", onPointerMove);
 
     let responded = false;
@@ -157,6 +167,16 @@ export class VisualSimilarityPlugin {
       responded = true;
       trialArea.removeEventListener("pointermove", onPointerMove);
       const responseAt = performance.now();
+      if (parameters.phase === "testing") {
+        const rectangle = trialArea.getBoundingClientRect();
+        trajectories.push({
+          trialId: parameters.trial.id,
+          sampleIndex: trajectories.length,
+          timestamp: responseAt,
+          elapsedMsFromCrossClick: responseAt - timing.crossClickedAt,
+          ...normalizePointer({ x: event.clientX, y: event.clientY }, rectangle),
+        });
+      }
       const result: TrialResult = {
         task: "visual_similarity",
         trialId: parameters.trial.id,

@@ -147,7 +147,7 @@ describe("visual similarity task", () => {
     ]);
   });
 
-  it("records post-fixation pointer moves in the existing trajectory callback", async () => {
+  it("records each testing trajectory from the center cross through the selected candidate", async () => {
     Object.defineProperties(window, {
       innerWidth: { configurable: true, value: 1080 },
       innerHeight: { configurable: true, value: 675 },
@@ -166,7 +166,9 @@ describe("visual similarity task", () => {
       onComplete: (_result, points) => { recorded = points; },
     });
     await Promise.resolve();
-    display.querySelector<HTMLButtonElement>(".vs-cross")?.click();
+    display.querySelector<HTMLButtonElement>(".vs-cross")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, clientX: 540, clientY: 338 }),
+    );
     const trialArea = display.querySelector<HTMLElement>(".vs-trial")!;
     trialArea.getBoundingClientRect = () => ({
       left: 0, top: 0, width: 1080, height: 675,
@@ -179,7 +181,9 @@ describe("visual similarity task", () => {
     );
 
     expect(recorded.map(({ xRaw, yRaw }) => ({ xRaw, yRaw }))).toEqual([
+      { xRaw: 540, yRaw: 338 },
       { xRaw: 600, yRaw: 338 },
+      { xRaw: 800, yRaw: 338 },
       { xRaw: 800, yRaw: 338 },
     ]);
   });

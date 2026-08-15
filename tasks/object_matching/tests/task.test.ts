@@ -123,4 +123,43 @@ describe("object matching task", () => {
     expect(display.querySelector(".om-stimulus-label")?.textContent).toBe("reference");
     expect(display.querySelectorAll(".om-reference .om-image-frame")).toHaveLength(1);
   });
+
+  it("records each testing trajectory from the center cross through the selected option", async () => {
+    Object.defineProperties(window, {
+      innerWidth: { configurable: true, value: 1080 },
+      innerHeight: { configurable: true, value: 675 },
+    });
+    const [trial] = parseObjectMatchingCsv(`${header}\n${row(0)}`);
+    const display = document.createElement("div");
+    const plugin = new ObjectMatchingPlugin({ finishTrial: () => undefined } as never);
+    let recorded: Array<{ xRaw: number; yRaw: number }> = [];
+
+    plugin.trial(display, {
+      trial,
+      phase: "testing",
+      trialNumber: 1,
+      totalInPhase: 1,
+      prepare: () => Promise.resolve(),
+      onComplete: (_result, points) => { recorded = points; },
+    });
+    await Promise.resolve();
+    display.querySelector<HTMLButtonElement>(".om-cross")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, clientX: 540, clientY: 338 }),
+    );
+    const trialArea = display.querySelector<HTMLElement>(".vs-trial")!;
+    trialArea.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: 1080, height: 675,
+      right: 1080, bottom: 675, x: 0, y: 0, toJSON: () => undefined,
+    });
+    trialArea.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 600, clientY: 338 }));
+    display.querySelector<HTMLButtonElement>(".om-candidate")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, clientX: 800, clientY: 338 }),
+    );
+
+    expect(recorded.map(({ xRaw, yRaw }) => ({ xRaw, yRaw }))).toEqual([
+      { xRaw: 540, yRaw: 338 },
+      { xRaw: 600, yRaw: 338 },
+      { xRaw: 800, yRaw: 338 },
+    ]);
+  });
 });

@@ -152,6 +152,16 @@ export class ObjectMatchingPlugin {
         ...normalizePointer({ x: event.clientX, y: event.clientY }, rectangle),
       });
     };
+    if (parameters.phase === "testing") {
+      const rectangle = trialArea.getBoundingClientRect();
+      trajectories.push({
+        trialId: parameters.trial.id,
+        sampleIndex: trajectories.length,
+        timestamp: timing.crossClickedAt,
+        elapsedMsFromCrossClick: 0,
+        ...normalizePointer({ x: timing.crossClickX, y: timing.crossClickY }, rectangle),
+      });
+    }
     trialArea.addEventListener("pointermove", onPointerMove);
 
     let responded = false;
@@ -160,6 +170,16 @@ export class ObjectMatchingPlugin {
       responded = true;
       trialArea.removeEventListener("pointermove", onPointerMove);
       const responseAt = performance.now();
+      if (parameters.phase === "testing") {
+        const rectangle = trialArea.getBoundingClientRect();
+        trajectories.push({
+          trialId: parameters.trial.id,
+          sampleIndex: trajectories.length,
+          timestamp: responseAt,
+          elapsedMsFromCrossClick: responseAt - timing.crossClickedAt,
+          ...normalizePointer({ x: event.clientX, y: event.clientY }, rectangle),
+        });
+      }
       const result: ObjectMatchingTrialResult = {
         task: "object_matching",
         trialId: parameters.trial.id,

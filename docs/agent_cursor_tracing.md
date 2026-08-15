@@ -15,9 +15,13 @@ center-cross click → begin recording
 first candidate response → stop recording
 ```
 
-Each `TrajectoryPoint` has a trial ID, ordered sample index, timestamp,
-elapsed time from the cross click, raw viewport coordinates, and normalized
-coordinates. Training trials do not contribute result or trajectory records.
+Every recorded testing trajectory has explicit endpoints: sample `0` is the
+center-cross click with elapsed time `0`, and the final sample is the selected
+candidate click. Real `pointermove` events between them remain intermediate
+samples. Each `TrajectoryPoint` has a trial ID, ordered sample index,
+timestamp, elapsed time from the cross click, raw viewport coordinates, and
+normalized coordinates. Training trials do not contribute result or trajectory
+records.
 
 The visual-similarity and object-matching renderers both add the collected
 points to the same session payload that records responses. No agent-specific
