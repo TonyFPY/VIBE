@@ -110,8 +110,11 @@ Add tests for:
 - presence of deployable manifests in the build output; and
 - unchanged local results persistence behavior.
 
-No test or deployment artifact may expose answer keys, private trial state, or
-agent-controller internals to the visual agent.
+The visual agent model must receive only screenshots and public instructions.
+No answer keys, private trial state, or agent-controller internals may appear
+in agent observations, prompts, model requests, URLs or filenames supplied to
+the model, or its action interface. Static browser assets remain governed by
+the existing screenshot-only boundary.
 
 ## Scope Limits
 
