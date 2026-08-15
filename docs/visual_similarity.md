@@ -9,9 +9,10 @@ owns rendering, center-cross gating, preloading, responses, and trajectories.
 Implement task-specific code in `tasks/visual_similarity` and reuse
 `tasks/shared` for app, session, persistence, and agent infrastructure.
 
-Load `data/dreamsim_100/data_100_web.csv`. Generate it from the source
+Load `/data/dreamsim_100/data_100_web.csv`. Generate it from the source
 `data/dreamsim/data_100.csv` with `data/dreamsim/prepare_web_stimuli.py`;
-the manifest points to deployable 512-pixel JPEGs under `data/dreamsim_100/`.
+the manifest and deployable 512-pixel JPEGs are written under
+`public/data/dreamsim_100/`.
 Rows `0–2` are training; row `3+` are testing. Preserve the source unique ID
 when present, otherwise preserve `csv_row_index`.
 
@@ -75,9 +76,10 @@ submissions remain in browser recovery storage and expose JSON downloads.
 
 The conversion command reads only images referenced by `data_100.csv`, writes
 JPEGs at quality 100 with their longest edge at most 512 px, and preserves
-their relative folder paths. Run it before deploying or whenever the source
-CSV changes. The development server maps `/data/dreamsim_100/...` to the local
-generated assets; production hosting must publish that folder at the same URL.
+their relative folder paths under `public/data/dreamsim_100/`. Run it before
+deploying or whenever the source CSV changes. Vite serves those public assets
+at `/data/dreamsim_100/...` locally and copies them to the production build at
+the same URL.
 
 ## Participant Flow
 
