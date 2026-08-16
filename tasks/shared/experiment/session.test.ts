@@ -21,4 +21,11 @@ describe("session identity", () => {
       agentName: "codex",
     });
   });
+
+  it("marks development sessions in their metadata and ID", () => {
+    const session = createSessionIdentity("?observer=agent&provider=openai&model=test&agent_name=codex&run=development");
+
+    expect(session.runMode).toBe("development");
+    expect(session.sessionId).toMatch(/^development_codex_openai_test_/);
+  });
 });

@@ -1,6 +1,7 @@
 export type ObserverType = "human" | "agent";
 export type Side = "left" | "right";
 export type TrialPhase = "training" | "testing";
+export type SessionRunMode = "development" | "full" | "trace-smoke";
 
 export const isRecordedPhase = (phase: TrialPhase) => phase === "testing";
 
@@ -11,6 +12,7 @@ export interface SessionIdentity {
   agentName?: string;
   agentProvider?: string;
   agentModel?: string;
+  runMode?: SessionRunMode;
   startedAtUtc: string;
   randomSeed: number;
 }

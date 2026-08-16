@@ -30,9 +30,12 @@ completion → saving state → optional POST to configured API
                               └─ unavailable/failure → retain recovery → downloads
 ```
 
-`VITE_RESULTS_ENDPOINT` is the explicit API configuration. When it is absent
-or blank, the browser makes no request and proceeds directly to the manual
-save state. When it is set, the browser sends the existing JSON payload with
+`VITE_RESULTS_ENDPOINT` is the explicit API configuration for full runs. A
+development run automatically uses the same-origin
+`/api/experiments/sessions` endpoint so local smoke tests exercise saving
+without extra configuration. For full runs, when the variable is absent or
+blank, the browser makes no request and proceeds directly to the manual save
+state. When an endpoint is selected, the browser sends the existing JSON payload with
 `Content-Type: application/json` and `Idempotency-Key: <session_id>`.
 
 An API is considered connected only after a successful HTTP response. A

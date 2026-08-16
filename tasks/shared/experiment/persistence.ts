@@ -1,12 +1,15 @@
-import type { SessionPayload } from "./types";
+import type { SessionPayload, SessionRunMode } from "./types";
+
+const defaultResultsEndpoint = "/api/experiments/sessions";
 
 export function resultsEndpoint(
   environment: Record<string, string | undefined> = (
     import.meta as ImportMeta & { env: Record<string, string | undefined> }
   ).env,
+  runMode?: SessionRunMode,
 ): string | undefined {
   const configured = environment.VITE_RESULTS_ENDPOINT?.trim();
-  return configured || undefined;
+  return configured || (runMode === "development" ? defaultResultsEndpoint : undefined);
 }
 
 const storageKey = (sessionId: string) => `visual-similarity:${sessionId}`;

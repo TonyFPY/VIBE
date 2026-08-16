@@ -46,12 +46,13 @@ testing pointer samples. The API must validate this schema, use `session_id`
 as its idempotency key, and atomically persist the result and trajectory data.
 Retries with the same key must not create duplicate sessions.
 
-The API is optional. If `VITE_RESULTS_ENDPOINT` is unset or blank, the browser
-does not make a network request and shows separate result and trajectory
-downloads after the run. If an endpoint is configured, the browser retries a
-bounded number of times with the same idempotency key and shows downloads if
-the API remains unavailable. Local recovery is retained until the API confirms
-success.
+The API is optional for full runs. Development runs automatically use the
+same-origin `/api/experiments/sessions` endpoint. If a full run has no
+`VITE_RESULTS_ENDPOINT`, the browser does not make a network request and shows
+separate result and trajectory downloads. If an endpoint is configured, the
+browser retries a bounded number of times with the same idempotency key and
+shows downloads if the API remains unavailable. Local recovery is retained
+until the API confirms success.
 
 For a local Vite results handler or separately deployed API, set this build-time
 variable before building:

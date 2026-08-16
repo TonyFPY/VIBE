@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- `VITE_RESULTS_ENDPOINT` is optional; blank/unset means no network request.
+- `VITE_RESULTS_ENDPOINT` is optional for full runs; development runs default to `/api/experiments/sessions`.
 - A save is successful only after an HTTP 2xx response.
 - Retries reuse the same payload and `Idempotency-Key`.
 - Recovery is cleared only after confirmed success.

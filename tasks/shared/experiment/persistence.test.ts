@@ -26,6 +26,11 @@ describe("results endpoint", () => {
   it("ignores an empty configured endpoint", () => {
     expect(resultsEndpoint({ VITE_RESULTS_ENDPOINT: "" })).toBeUndefined();
   });
+
+  it("uses the same-origin API automatically for development runs", () => {
+    expect(resultsEndpoint({}, "development")).toBe("/api/experiments/sessions");
+    expect(resultsEndpoint({}, "full")).toBeUndefined();
+  });
 });
 
 describe("submitSession", () => {

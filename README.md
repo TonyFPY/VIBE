@@ -44,10 +44,10 @@ source-code access.
 The website records testing cursor trajectories and saves them through the same
 session payload for humans and agents. See [website cursor trajectories](docs/agent_cursor_tracing.md).
 
-At completion, a configured `VITE_RESULTS_ENDPOINT` receives the session once
-the API is available. Without an endpoint, or after bounded API failures, the
-completion screen keeps browser recovery data and offers separate downloads for
-results and trajectories.
+At completion, development runs automatically submit to the same-origin
+`/api/experiments/sessions` endpoint. Full runs use `VITE_RESULTS_ENDPOINT` when
+configured; otherwise the completion screen keeps browser recovery data and
+offers separate downloads for results and trajectories.
 
 ### Codex chat development prompts
 

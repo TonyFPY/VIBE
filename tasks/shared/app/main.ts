@@ -50,11 +50,11 @@ function download(name: string, contents: unknown): void {
   URL.revokeObjectURL(link.href);
 }
 
-async function finish(): Promise<void> {
+async function finish(runMode: RunMode): Promise<void> {
   await finishSession({
     root,
     payload: payload(),
-    endpoint: resultsEndpoint(),
+    endpoint: resultsEndpoint(undefined, runMode),
     checkpoint,
     download,
     closeWindow: () => window.setTimeout(() => window.close(), 900),
@@ -101,7 +101,7 @@ async function startVisualSimilarity(runMode: RunMode): Promise<void> {
   const response = await fetch("/data/dreamsim_100/data_100_web.csv");
   if (!response.ok) throw new Error("The trial dataset could not be loaded.");
   const phases = selectRunPhases(splitExperimentPhases(parseDreamSimCsv(await response.text())), runMode);
-  const jsPsych = initJsPsych({ display_element: root, on_finish: () => void finish() });
+  const jsPsych = initJsPsych({ display_element: root, on_finish: () => void finish(runMode) });
   jsPsych.run([
     { type: InstructionPlugin },
     ...timelineFor("training", phases.training),
@@ -117,7 +117,7 @@ async function startObjectMatching(runMode: ObjectMatchingRunMode): Promise<void
     splitObjectMatchingPhases(parseObjectMatchingCsv(await response.text())),
     runMode,
   );
-  const jsPsych = initJsPsych({ display_element: root, on_finish: () => void finish() });
+  const jsPsych = initJsPsych({ display_element: root, on_finish: () => void finish(runMode) });
   jsPsych.run([
     { type: ObjectMatchingInstructionPlugin },
     ...objectMatchingTimelineFor("training", phases.training),
