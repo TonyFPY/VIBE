@@ -25,7 +25,10 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Local experiment recovery and downloaded result files
+# Local tool and agent-workflow state
+.firebase/
+.agents/
+skills-lock.json
 .superpowers/
 .worktrees/
 
