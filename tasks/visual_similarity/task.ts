@@ -18,7 +18,7 @@ export interface DreamSimTrial {
 }
 
 export interface TrialPhases { training: DreamSimTrial[]; testing: DreamSimTrial[]; }
-export type RunMode = "development" | "full" | "trace-smoke";
+export type RunMode = "development" | "full";
 export interface PublicTrial { referenceImage: string; leftCandidate: string; rightCandidate: string; }
 
 function toAssetPath(path: string): string {
@@ -65,7 +65,6 @@ export function parseDreamSimCsv(csv: string): DreamSimTrial[] {
 
 export const splitExperimentPhases = (trials: DreamSimTrial[]): TrialPhases => ({ training: trials.slice(0, 3), testing: trials.slice(3) });
 export function selectRunPhases(phases: TrialPhases, mode: RunMode): TrialPhases {
-  if (mode === "trace-smoke") return { training: [], testing: phases.testing.slice(0, 1) };
   return mode === "development"
     ? { training: phases.training.slice(0, 3), testing: phases.testing.slice(0, 10) }
     : phases;

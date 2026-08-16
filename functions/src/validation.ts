@@ -17,6 +17,19 @@ function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export function normalizeTrajectoryForFirestore(trajectory: JsonObject): JsonObject {
+  const points = trajectory.points;
+  if (!Array.isArray(points)) return trajectory;
+
+  return {
+    ...trajectory,
+    points: points.map((point) => {
+      const [elapsedMs, xPx, yPx] = point as [number, number, number];
+      return {elapsedMs, xPx, yPx};
+    }),
+  };
+}
+
 function requireString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.length === 0) throw new Error(`${label} must be a non-empty string`);
   return value;
@@ -32,12 +45,14 @@ export function validateSessionPayload(payload: unknown, idempotencyKey: string)
   const sessionId = requireString(payload.session.sessionId, "sessionId");
   if (!safeSessionId.test(sessionId)) throw new Error("sessionId must be filesystem-safe");
   if (idempotencyKey !== sessionId) throw new Error("Idempotency-Key must match sessionId");
-  if (payload.session.observerType !== "human" && payload.session.observerType !== "agent") {
-    throw new Error("observerType must be human or agent");
+  const participantId = requireString(payload.session.participantId, "participantId");
+  if (!/^[A-Za-z0-9_-]+$/.test(participantId)) throw new Error("participantId must be filesystem-safe");
+  if (payload.session.participantType !== "human" && payload.session.participantType !== "agent") {
+    throw new Error("participantType must be human or agent");
   }
-  requireString(payload.session.startedAtUtc, "startedAtUtc");
-  if (typeof payload.session.randomSeed !== "number" || !Number.isFinite(payload.session.randomSeed)) {
-    throw new Error("randomSeed must be a finite number");
+  const model = requireString(payload.session.model, "model");
+  if (payload.session.runMode !== "dev" && payload.session.runMode !== "ops") {
+    throw new Error("runMode must be dev or ops");
   }
 
   if (payload.results.length === 0 || payload.results.length > maxRecords) {
@@ -73,7 +88,13 @@ export function validateSessionPayload(payload: unknown, idempotencyKey: string)
   }
 
   return {
-    session: payload.session,
+    session: {
+      sessionId,
+      participantId,
+      participantType: payload.session.participantType,
+      model,
+      runMode: payload.session.runMode,
+    },
     results: payload.results,
     trajectories: payload.trajectories,
     writeCount,

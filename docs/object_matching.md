@@ -28,9 +28,9 @@ trial_id,class_name,reference,candidate_0,...,candidate_7,correct_label
 `correct_label` is the private integer `0`–`7` identifying the correct
 candidate. Preserve `trial_id`, otherwise preserve `csv_row_index`.
 
-Rows `0–2` are training; rows `3+` are testing. `mode=development` selects
-the first 3 training and first 10 testing trials. Omit the mode, or use any
-other value, for the complete run.
+Rows `0–2` are training; rows `3+` are testing. `run=dev` selects the first 3
+training and first 10 testing trials. `run=ops` selects the complete operation;
+an omitted or unknown run parameter defaults to development.
 
 ## Run Identity and Commands
 
@@ -41,8 +41,9 @@ Use the same launch metadata as visual similarity:
 ```
 
 Participant IDs beginning with `H` identify human launches; IDs beginning with
-`A` identify agent launches. Agent launches supply `model`; `provider` and
-`agent_name` are optional metadata. The agent never types identity into the UI.
+`A` identify agent launches. Agent launches supply `model`; only
+`participant_id`, `model`, and `run` affect the saved session. The agent never
+types identity into the UI.
 
 ```bash
 npm install
@@ -54,13 +55,13 @@ npm run build
 
 ```text
 # Human developer test: 3 training + 10 testing trials
-http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&mode=development
+http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&run=dev
 
-# Human full run
-http://127.0.0.1:5173/tasks/object-matching?participant_id=H001
+# Human operation run
+http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&run=ops
 
 # Agent developer test
-http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=gpt-5&mode=development
+http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=gpt-5&run=dev
 ```
 
 Run the subset command before deployment or after changing `data_100.csv`.
@@ -168,11 +169,14 @@ trajectories/{session_id}.json  # testing pointer records
 Generate filesystem-safe IDs using the shared convention:
 
 ```text
-{participant_id}_{provider}_{model}_{UTC}_<random8>
+dev_human_001_<UTC>_<random8>
+ops_agent_001_<UTC>_<random8>
 ```
 
-Use `session_id` as the API idempotency key. Retry bounded failures; preserve
-local recovery data and do not show completion until the API confirms success.
+Use `session_id` as the API idempotency key. The saved session object contains
+only `sessionId`, `participantId`, `participantType`, `model`, and `runMode`.
+Retry bounded failures; preserve local recovery data and do not show completion
+until the API confirms success.
 If no API is available locally, expose downloads of those same two JSON files.
 
 ## Human and Agent Boundary
@@ -189,7 +193,7 @@ not share mutable state or overwrite each other’s results.
 
 ## Acceptance Checks
 
-- Unit-test CSV parsing, 3/remaining phase split, development/full selection,
+- Unit-test CSV parsing, 3/remaining phase split, dev/ops selection,
   `selected_label === correct_label` scoring, coordinate normalization, and
   public/private state separation.
 - Browser-test instruction flow, 1080 × 675 viewport gate, cross gating,

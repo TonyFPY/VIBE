@@ -21,37 +21,49 @@ The local site is then available at `http://127.0.0.1:5173`.
 
 ## Human testing
 
-Open one of these URLs in a normal browser. Development mode is exactly three
-training trials followed by ten testing trials. Omit `run=development` for a
-full session.
+Open one of these URLs in a normal browser. `run=dev` is exactly three training
+trials followed by ten testing trials. `run=ops` runs the full operation.
 
-| Task | Development run | Full run |
+| Task | Development (`run=dev`) | Operation (`run=ops`) |
 | --- | --- | --- |
-| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&run=development` | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001` |
-| Object matching | `http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&run=development` | `http://127.0.0.1:5173/tasks/object-matching?participant_id=H001` |
+| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&run=dev` | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&run=ops` |
+| Object matching | `http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&run=dev` | `http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&run=ops` |
 
-The participant ID prefix selects the observer type: IDs beginning with `H` are
-human sessions and IDs beginning with `A` are agent sessions. The legacy
-`observer` query parameter is ignored. For agent sessions, set the external
-model in the URL; `provider` and `agent_name` are optional metadata.
+The `participant_id` prefix selects the participant type: `H001` is saved as
+`participantId: "001", participantType: "human"`, while `A001` is saved as
+`participantId: "001", participantType: "agent"`. The `model` query parameter
+is used for agent sessions and is saved as `"None"` for humans. Provider,
+agent-name, and other optional identity parameters are not saved.
 
 ## Agent testing
 
-Agent runs use the same URLs, with agent identity parameters. A real agent must
+Agent runs use the same URLs, with `participant_id`, `model`, and `run`. A real agent must
 receive screenshots only; do not give it DOM, accessibility, task-data, or
 source-code access.
 
-| Task | Development URL | Full-run URL |
+| Task | Development URL | Operation URL |
 | --- | --- | --- |
-| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5&run=development` | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5` |
-| Object matching | `http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=gpt-5&run=development` | `http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=gpt-5` |
+| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5.6-luna&run=dev` | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5.6-luna&run=ops` |
+| Object matching | `http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=gpt-5.6-luna&run=dev` | `http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=gpt-5.6-luna&run=ops` |
+
+Each saved session contains only this identity shape:
+
+```json
+{
+  "sessionId": "dev_agent_001_20260816T160810Z_68593840",
+  "participantId": "001",
+  "participantType": "agent",
+  "model": "gpt-5.6-luna",
+  "runMode": "dev"
+}
+```
 
 The website records testing cursor trajectories and saves them through the same
 session payload for humans and agents. See [website cursor trajectories](docs/agent_cursor_tracing.md).
 
-At completion, development runs automatically submit to the same-origin
-`/api/experiments/sessions` endpoint. Full runs use `VITE_RESULTS_ENDPOINT` when
-configured; otherwise the completion screen keeps browser recovery data and
+At completion, `run=dev` sessions automatically submit to the same-origin
+`/api/experiments/sessions` endpoint. `run=ops` sessions use `VITE_RESULTS_ENDPOINT` when
+`run=ops` sessions use `VITE_RESULTS_ENDPOINT` when configured; otherwise the completion screen keeps browser recovery data and
 offers separate downloads for results and trajectories.
 
 ### Codex chat development prompts
@@ -65,7 +77,7 @@ testing trajectories through the same path used for human sessions.
 ```text
 Open this local experiment URL:
 
-http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=codex&run=development
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=codex&run=dev
 
 Complete the visible experiment using computer-use interaction only.
 
@@ -86,7 +98,7 @@ Rules:
 ```text
 Open this local experiment URL:
 
-http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=codex&run=development
+http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=codex&run=dev
 
 Complete the visible experiment using computer-use interaction only.
 

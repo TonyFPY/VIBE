@@ -3,56 +3,47 @@ import { describe, expect, it } from "vitest";
 import { createSessionIdentity } from "./session";
 
 describe("session identity", () => {
-  it("does not include browser trace policy in an agent session", () => {
-    const session = createSessionIdentity(
-      "?participant_id=A001&provider=openai&model=test&agent_name=codex&cursor_trace_steps=20",
-    );
-
-    expect(session).not.toHaveProperty("agentCursorTraceSteps");
-  });
-
-  it("infers human mode from an H participant id", () => {
-    const session = createSessionIdentity("?observer=agent&participant_id=H001");
+  it("normalizes a human development session to the compact saved schema", () => {
+    const session = createSessionIdentity("?participant_id=H001&run=dev&provider=ignored&agent_name=ignored");
 
     expect(session).toMatchObject({
-      observerType: "human",
-      participantId: "H001",
+      participantId: "001",
+      participantType: "human",
+      model: "None",
+      runMode: "dev",
     });
-    expect(session.sessionId).toMatch(/^H001_local_human_/);
+    expect(session).toEqual(expect.objectContaining({
+      sessionId: expect.stringMatching(/^dev_human_001_/),
+    }));
+    expect(Object.keys(session).sort()).toEqual(["model", "participantId", "participantType", "runMode", "sessionId"]);
   });
 
-  it("infers agent mode from an A participant id and preserves the supplied model", () => {
-    const session = createSessionIdentity(
-      "?observer=human&participant_id=A001&provider=openai&model=gpt-5.6-luna&agent_name=codex",
-    );
+  it("normalizes an agent operation session and keeps only the model metadata", () => {
+    const session = createSessionIdentity("?participant_id=A001&model=gpt-5.6-luna&run=ops&provider=openai&agent_name=codex");
 
     expect(session).toMatchObject({
-      observerType: "agent",
-      agentProvider: "openai",
-      agentModel: "gpt-5.6-luna",
-      agentName: "codex",
-      participantId: "A001",
+      participantId: "001",
+      participantType: "agent",
+      model: "gpt-5.6-luna",
+      runMode: "ops",
     });
-    expect(session.sessionId).toMatch(/^A001_openai_gpt-5-6-luna_/);
+    expect(session.sessionId).toMatch(/^ops_agent_001_/);
   });
 
-  it("allows agent launches to omit provider and agent name", () => {
-    const session = createSessionIdentity("?participant_id=A002&model=external-model");
+  it("maps the legacy development value to dev", () => {
+    const session = createSessionIdentity("?participant_id=H002&run=development");
 
     expect(session).toMatchObject({
-      observerType: "agent",
-      agentProvider: "unknown",
-      agentModel: "external-model",
-      agentName: "agent",
+      participantId: "002",
+      participantType: "human",
+      model: "None",
+      runMode: "dev",
     });
+    expect(session.sessionId).toMatch(/^dev_human_002_/);
   });
 
-  it("marks development sessions in their metadata and ID", () => {
-    const session = createSessionIdentity(
-      "?participant_id=A001&provider=openai&model=test&agent_name=codex&run=development",
-    );
-
-    expect(session.runMode).toBe("development");
-    expect(session.sessionId).toMatch(/^development_A001_openai_test_/);
+  it("defaults unknown and missing run selectors to dev", () => {
+    expect(createSessionIdentity("?participant_id=H001&run=preview").runMode).toBe("dev");
+    expect(createSessionIdentity("?participant_id=H001").runMode).toBe("dev");
   });
 });

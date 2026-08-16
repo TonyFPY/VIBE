@@ -2,15 +2,21 @@ import { describe, expect, it } from "vitest";
 import { parseLaunch, runModeFromSearch } from "./launch";
 
 describe("launch parsing", () => {
-  it("selects visual similarity and defaults to the full run", () => {
+  it("selects visual similarity and defaults to the development run", () => {
     expect(parseLaunch("/tasks/visual-similarity", "")).toEqual({
-      task: "visual-similarity", runMode: "full",
+      task: "visual-similarity", runMode: "development",
     });
   });
 
-  it("selects object matching and canonical development mode", () => {
-    expect(parseLaunch("/tasks/object-matching", "?run=development")).toEqual({
+  it("selects object matching and canonical development mode from run=dev", () => {
+    expect(parseLaunch("/tasks/object-matching", "?run=dev")).toEqual({
       task: "object-matching", runMode: "development",
+    });
+  });
+
+  it("selects the operation mode from run=ops", () => {
+    expect(parseLaunch("/tasks/object-matching", "?run=ops")).toEqual({
+      task: "object-matching", runMode: "full",
     });
   });
 
@@ -18,9 +24,8 @@ describe("launch parsing", () => {
     expect(runModeFromSearch("?mode=development")).toBe("development");
   });
 
-  it("keeps trace smoke explicit and treats other values as full", () => {
-    expect(runModeFromSearch("?run=trace-smoke")).toBe("trace-smoke");
-    expect(runModeFromSearch("?run=preview")).toBe("full");
+  it("treats unknown modes as development", () => {
+    expect(runModeFromSearch("?run=preview")).toBe("development");
   });
 
   it("rejects undeclared task routes", () => {

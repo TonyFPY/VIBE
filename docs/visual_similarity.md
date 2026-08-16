@@ -26,9 +26,9 @@ tasks/visual_similarity/renderer.ts      instructions, test-ready screen, 2AFC r
 tasks/shared/app/styles.css               fixed psychophysics canvas and neutral styling
 ```
 
-The route is `/tasks/visual-similarity`. `mode=development` selects exactly
-the first 3 training and first 10 testing trials. Any other mode, including no
-mode parameter, uses all testing rows. Human and agent sessions share the same
+The route is `/tasks/visual-similarity`. `run=dev` selects exactly the first 3
+training and first 10 testing trials. `run=ops` uses all testing rows. An
+omitted or unknown run parameter defaults to development. Human and agent sessions share the same
 timeline, renderer, stimuli, response mapping, and persistence schema.
 
 ## Run Identity
@@ -37,15 +37,15 @@ The launcher/controller supplies run identity before opening the task, for
 example:
 
 ```text
-?participant_id=A001&model=gpt-5
+?participant_id=A001&model=gpt-5&run=ops
 ```
 
 Use these launch values to create the session ID and metadata. Agents never
 type an identity into the participant UI, so the visible instruction/start
 page remains identical across observers. Participant IDs beginning with `H`
 identify human runs; IDs beginning with `A` identify agent runs. Supply the
-external model in the launch URL for agent runs. `provider` and `agent_name`
-are optional metadata parameters.
+external model in the launch URL for agent runs. Only `participant_id`,
+`model`, and `run` affect the saved session.
 
 ## Run Commands
 
@@ -63,17 +63,17 @@ Open one of these URLs after `npm run dev`:
 
 ```text
 # Developer testing: 3 training + 10 testing trials
-http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&mode=development
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&run=dev
 
-# Human participant: full run
-http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001
+# Human operation run
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&run=ops
 
 # Visual-agent development run
-http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5&mode=development
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5&run=dev
 ```
 
-`mode=development` selects the first three training and first ten testing
-trials. Omit it for the full run. Without a results API, failed final
+`run=dev` selects the first three training and first ten testing trials.
+`run=ops` selects the full operation. Without a results API, failed final
 submissions remain in browser recovery storage and expose JSON downloads.
 
 The conversion command reads only images referenced by `data_100.csv`, writes
@@ -161,20 +161,17 @@ screen and POST one complete session payload to the HTTP results API. The API
 must atomically persist two JSON files keyed by a filesystem-safe `session_id`:
 
 ```text
-{participant_id}_{provider}_{model}_{UTC}_<random8>
-# e.g. A001_openai_gpt-5_20260813T143022Z_a1b2c3d4
+dev_human_001_<UTC>_<random8>
+ops_agent_001_<UTC>_<random8>
 
 results/{session_id}.json       # session metadata and 2AFC trial records
 trajectories/{session_id}.json  # testing pointer-trajectory records
 ```
 
-Use an `H` participant ID for people and an `A` participant ID for agents.
-Agent metadata includes the provider and the exact model label supplied in the
-URL (for example `openai` and `gpt-5.6-luna`). The UTC timestamp documents run
-start time; the random eight-character suffix prevents concurrent filename
-collisions. Store `session_id`, `observer_type`, `participant_id`, `agent_provider`,
-`agent_model`, and ISO-8601 `started_at_utc` as structured fields in the
-results JSON, not only in its filename.
+Use an `H` participant ID for people and an `A` participant ID for agents. The
+prefix is removed from the saved `participantId`; `participantType` records the
+observer type. The saved session object contains only `sessionId`,
+`participantId`, `participantType`, `model`, and `runMode`.
 
 Retry a bounded number of failed submissions, retain recovery data on failure,
 and show completion only after explicit API success. Attempt `window.close()`
@@ -211,7 +208,7 @@ paths; private state retains target side and correctness.
 
 ## Acceptance Checks
 
-- Current unit coverage: CSV phase split, development/full selection, scoring,
+- Current unit coverage: CSV phase split, dev/ops selection, scoring,
   pointer normalization, private answer omission, preload waiting, fixed
   viewport validation, horizontal stimulus markup, and test-ready confirmation.
 - Run `npm test` and `npm run build` before handoff.

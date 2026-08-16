@@ -18,22 +18,27 @@ application. It is for local development, not unattended production
 collection. `npm run build` creates the deployable `dist/` directory, including
 approximately 135 MB of stimulus assets.
 
-Canonical development URLs are:
+Canonical session URLs are:
 
 ```text
-https://<host>/tasks/visual-similarity?run=development&participant_id=H001
-https://<host>/tasks/object-matching?run=development&participant_id=H001
-https://<host>/tasks/visual-similarity?run=development&participant_id=A001&model=gpt-5.6-luna
-https://<host>/tasks/object-matching?run=development&participant_id=A001&model=gpt-5.6-luna
+https://<host>/tasks/visual-similarity?run=dev&participant_id=H001
+https://<host>/tasks/object-matching?run=dev&participant_id=H001
+https://<host>/tasks/visual-similarity?run=ops&participant_id=H001
+https://<host>/tasks/object-matching?run=ops&participant_id=H001
+https://<host>/tasks/visual-similarity?run=dev&participant_id=A001&model=gpt-5.6-luna
+https://<host>/tasks/object-matching?run=dev&participant_id=A001&model=gpt-5.6-luna
+https://<host>/tasks/visual-similarity?run=ops&participant_id=A001&model=gpt-5.6-luna
+https://<host>/tasks/object-matching?run=ops&participant_id=A001&model=gpt-5.6-luna
 
 e.g.
 <host> is https://vibe-9d6e5.web.app
 ```
 
-Omit `run=development` for a full run. Participant IDs beginning with `H` are
-human sessions; IDs beginning with `A` are agent sessions. Agent runs add
-`model` and may optionally add `provider` or `agent_name` as metadata. The
-legacy `observer` parameter is ignored.
+`run=dev` selects the development subset. `run=ops` selects the full operation.
+`participant_id=H001` saves participant `001` as type `human`; `A001` saves it
+as type `agent`. Agent URLs should include `model`; human sessions save
+`model: "None"`. Provider, agent name, and other optional identity parameters
+are ignored and never saved.
 
 ## Results API
 
@@ -46,14 +51,14 @@ Idempotency-Key: <session_id>
 ```
 
 The payload has `session`, `results`, and `trajectories` fields. The `session`
-object supplies the unique `sessionId`, observer identity, start timestamp, and
-random seed; `results` contains trial records; and `trajectories` contains
+object supplies the compact `sessionId`, `participantId`, `participantType`,
+`model`, and `runMode`; `results` contains trial records; and `trajectories` contains
 testing pointer samples. The API must validate this schema, use `session_id`
 as its idempotency key, and atomically persist the result and trajectory data.
 Retries with the same key must not create duplicate sessions.
 
-The API is optional for full runs. Development runs automatically use the
-same-origin `/api/experiments/sessions` endpoint. If a full run has no
+The API is optional for ops runs. Dev runs automatically use the
+same-origin `/api/experiments/sessions` endpoint. If an ops run has no
 `VITE_RESULTS_ENDPOINT`, the browser does not make a network request and shows
 separate result and trajectory downloads. If an endpoint is configured, the
 browser retries a bounded number of times with the same idempotency key and

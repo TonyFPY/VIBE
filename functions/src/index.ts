@@ -5,7 +5,7 @@ import {setGlobalOptions} from "firebase-functions";
 import {onRequest} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import type {Request, Response} from "express";
-import {validateSessionPayload} from "./validation";
+import {normalizeTrajectoryForFirestore, validateSessionPayload} from "./validation";
 
 initializeApp();
 const db = getFirestore();
@@ -97,7 +97,7 @@ export const saveSession = onRequest(
     });
     validated.trajectories.forEach((trajectory, index) => {
       const trajectoryRef = sessionRef.collection("trajectories").doc(stableDocumentId(trajectory.trialId as string, index));
-      batch.create(trajectoryRef, trajectory);
+      batch.create(trajectoryRef, normalizeTrajectoryForFirestore(trajectory));
     });
 
     try {

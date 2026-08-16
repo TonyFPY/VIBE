@@ -1,20 +1,16 @@
 export type ObserverType = "human" | "agent";
 export type Side = "left" | "right";
 export type TrialPhase = "training" | "testing";
-export type SessionRunMode = "development" | "full" | "trace-smoke";
+export type SessionRunMode = "dev" | "ops";
 
 export const isRecordedPhase = (phase: TrialPhase) => phase === "testing";
 
 export interface SessionIdentity {
   sessionId: string;
-  observerType: ObserverType;
-  participantId?: string;
-  agentName?: string;
-  agentProvider?: string;
-  agentModel?: string;
-  runMode?: SessionRunMode;
-  startedAtUtc: string;
-  randomSeed: number;
+  participantId: string;
+  participantType: ObserverType;
+  model: string;
+  runMode: SessionRunMode;
 }
 
 export interface TrialTrajectory {

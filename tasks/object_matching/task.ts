@@ -14,7 +14,7 @@ export interface ObjectMatchingTrialPhases {
   testing: ObjectMatchingTrial[];
 }
 
-export type ObjectMatchingRunMode = "development" | "full" | "trace-smoke";
+export type ObjectMatchingRunMode = "development" | "full";
 export const OBJECT_IMAGE_SIZE = 160;
 export const OBJECT_STIMULUS_GRID = { width: 720, height: 560 } as const;
 
@@ -91,7 +91,6 @@ export function selectObjectMatchingRunPhases(
   phases: ObjectMatchingTrialPhases,
   mode: ObjectMatchingRunMode,
 ): ObjectMatchingTrialPhases {
-  if (mode === "trace-smoke") return { training: [], testing: phases.testing.slice(0, 1) };
   return mode === "development"
     ? { training: phases.training.slice(0, 3), testing: phases.testing.slice(0, 10) }
     : phases;

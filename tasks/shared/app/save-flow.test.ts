@@ -6,9 +6,10 @@ import { finishSession } from "./save-flow";
 const payload = (): SessionPayload => ({
   session: {
     sessionId: "flow-session",
-    observerType: "human",
-    startedAtUtc: "2026-08-16T00:00:00.000Z",
-    randomSeed: 1,
+    participantId: "001",
+    participantType: "human",
+    model: "None",
+    runMode: "dev",
   },
   results: [],
   trajectories: [],

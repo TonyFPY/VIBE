@@ -223,21 +223,22 @@ Follow those files for task-specific stimulus layout, conditions, responses, and
 
 ## Data Logging
 
-Reuse the existing behavioral data schema and minimally extend it for agent metadata.
+Reuse the existing behavioral data schema. Session identity is deliberately
+compact and shared by humans and agents.
 
 Record where available:
 
 ```text
-observer_type
-participant_id / agent_session_id
+sessionId
+participantId
+participantType
+model
+runMode
 trial_id
 stimulus_id
 condition
 response
 correct
-
-agent_model
-agent_provider
 observation_count
 action_count
 raw_model_output

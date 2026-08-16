@@ -1,5 +1,5 @@
 export type TaskRoute = "visual-similarity" | "object-matching";
-export type LaunchRunMode = "development" | "full" | "trace-smoke";
+export type LaunchRunMode = "development" | "full";
 
 export interface Launch {
   task: TaskRoute;
@@ -9,7 +9,9 @@ export interface Launch {
 export function runModeFromSearch(search: string): LaunchRunMode {
   const params = new URLSearchParams(search);
   const value = params.get("run") ?? params.get("mode");
-  return value === "development" || value === "trace-smoke" ? value : "full";
+  if (value === "dev" || value === "development") return "development";
+  if (value === "ops") return "full";
+  return "development";
 }
 
 export function parseLaunch(pathname: string, search: string): Launch {

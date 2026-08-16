@@ -55,15 +55,6 @@ describe("object matching task", () => {
     expect(selectObjectMatchingRunPhases(phases, "full")).toEqual(phases);
   });
 
-  it("uses no training trials and one testing trial for local trace smoke", () => {
-    const trials = parseObjectMatchingCsv(`${header}\n${Array.from({ length: 5 }, (_, index) => row(index)).join("\n")}`);
-
-    expect(selectObjectMatchingRunPhases(splitObjectMatchingPhases(trials), "trace-smoke")).toEqual({
-      training: [],
-      testing: [trials[3]],
-    });
-  });
-
   it("scores the selected candidate against the private correct label", () => {
     expect(scoreObjectMatchingResponse(4, 4)).toBe(true);
     expect(scoreObjectMatchingResponse(2, 4)).toBe(false);

@@ -46,18 +46,6 @@ describe("visual similarity task", () => {
     expect(selectRunPhases(phases, "full")).toEqual(phases);
   });
 
-  it("uses no training trials and one testing trial for local trace smoke", () => {
-    const rows = parseDreamSimCsv(
-      "id,left_vote,right_vote,ref_path,left_path,right_path\n" +
-        Array.from({ length: 5 }, (_, index) => `${index + 1},1,0,ref/${index}.png,left/${index}.png,right/${index}.png`).join("\n"),
-    );
-
-    expect(selectRunPhases(splitExperimentPhases(rows), "trace-smoke")).toEqual({
-      training: [],
-      testing: [rows[3]],
-    });
-  });
-
   it("scores a selected candidate against the private target side", () => {
     expect(scoreResponse("left", "left")).toBe(true);
     expect(scoreResponse("right", "left")).toBe(false);
