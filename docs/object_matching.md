@@ -37,11 +37,12 @@ other value, for the complete run.
 Use the same launch metadata as visual similarity:
 
 ```text
-?observer=agent&provider=openai&model=gpt-5&agent_name=codex
+?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex
 ```
 
-Human launches supply `participant_id`; agent launches supply `provider`,
-`model`, and `agent_name`. The agent never types identity into the UI.
+Participant IDs beginning with `H` identify human launches; IDs beginning with
+`A` identify agent launches. Agent launches also supply `provider`, `model`,
+and optionally `agent_name`. The agent never types identity into the UI.
 
 ```bash
 npm install
@@ -53,13 +54,13 @@ npm run build
 
 ```text
 # Human developer test: 3 training + 10 testing trials
-http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=dev-tony&mode=development
+http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&mode=development
 
 # Human full run
-http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=P001
+http://127.0.0.1:5173/tasks/object-matching?participant_id=H001
 
 # Agent developer test
-http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=gpt-5&agent_name=codex&mode=development
+http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex&mode=development
 ```
 
 Run the subset command before deployment or after changing `data_100.csv`.
@@ -167,7 +168,7 @@ trajectories/{session_id}.json  # testing pointer records
 Generate filesystem-safe IDs using the shared convention:
 
 ```text
-{observer}_{provider}_{model}_{UTC}_<random8>
+{participant_id}_{provider}_{model}_{UTC}_<random8>
 ```
 
 Use `session_id` as the API idempotency key. Retry bounded failures; preserve

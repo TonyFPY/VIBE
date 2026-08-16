@@ -27,8 +27,13 @@ full session.
 
 | Task | Development run | Full run |
 | --- | --- | --- |
-| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=dev-human&run=development` | `http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=P001` |
-| Object matching | `http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=dev-human&run=development` | `http://127.0.0.1:5173/tasks/object-matching?observer=human&participant_id=P001` |
+| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&run=development` | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001` |
+| Object matching | `http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&run=development` | `http://127.0.0.1:5173/tasks/object-matching?participant_id=H001` |
+
+The participant ID prefix selects the observer type: IDs beginning with `H` are
+human sessions and IDs beginning with `A` are agent sessions. The legacy
+`observer` query parameter is ignored. For agent sessions, set the external
+provider and model directly in the URL.
 
 ## Agent testing
 
@@ -38,8 +43,8 @@ source-code access.
 
 | Task | Development URL | Full-run URL |
 | --- | --- | --- |
-| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=gpt-5&agent_name=codex&run=development` | `http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=gpt-5&agent_name=codex` |
-| Object matching | `http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=gpt-5&agent_name=codex&run=development` | `http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=gpt-5&agent_name=codex` |
+| Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex&run=development` | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex` |
+| Object matching | `http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex&run=development` | `http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex` |
 
 The website records testing cursor trajectories and saves them through the same
 session payload for humans and agents. See [website cursor trajectories](docs/agent_cursor_tracing.md).
@@ -60,7 +65,7 @@ testing trajectories through the same path used for human sessions.
 ```text
 Open this local experiment URL:
 
-http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=codex&agent_name=codex-chat&run=development
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&provider=openai&model=codex&agent_name=codex-chat&run=development
 
 Complete the visible experiment using computer-use interaction only.
 
@@ -81,7 +86,7 @@ Rules:
 ```text
 Open this local experiment URL:
 
-http://127.0.0.1:5173/tasks/object-matching?observer=agent&provider=openai&model=codex&agent_name=codex-chat&run=development
+http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&provider=openai&model=codex&agent_name=codex-chat&run=development
 
 Complete the visible experiment using computer-use interaction only.
 

@@ -37,13 +37,14 @@ The launcher/controller supplies run identity before opening the task, for
 example:
 
 ```text
-?observer=agent&provider=openai&model=gpt-5&agent_name=codex
+?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex
 ```
 
 Use these launch values to create the session ID and metadata. Agents never
 type an identity into the participant UI, so the visible instruction/start
-page remains identical across observers. Supply a participant ID for human
-runs from the launch URL.
+page remains identical across observers. Participant IDs beginning with `H`
+identify human runs; IDs beginning with `A` identify agent runs. Supply the
+external provider and model in the launch URL for agent runs.
 
 ## Run Commands
 
@@ -61,13 +62,13 @@ Open one of these URLs after `npm run dev`:
 
 ```text
 # Developer testing: 3 training + 10 testing trials
-http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=dev-tony&mode=development
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&mode=development
 
 # Human participant: full run
-http://127.0.0.1:5173/tasks/visual-similarity?observer=human&participant_id=P001
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001
 
 # Visual-agent development run
-http://127.0.0.1:5173/tasks/visual-similarity?observer=agent&provider=openai&model=gpt-5&agent_name=codex&mode=development
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex&mode=development
 ```
 
 `mode=development` selects the first three training and first ten testing
@@ -159,17 +160,18 @@ screen and POST one complete session payload to the HTTP results API. The API
 must atomically persist two JSON files keyed by a filesystem-safe `session_id`:
 
 ```text
-{observer}_{provider}_{model}_{UTC}_<random8>
-# e.g. codex_openai_gpt-5_20260813T143022Z_a1b2c3d4
+{participant_id}_{provider}_{model}_{UTC}_<random8>
+# e.g. A001_openai_gpt-5_20260813T143022Z_a1b2c3d4
 
 results/{session_id}.json       # session metadata and 2AFC trial records
 trajectories/{session_id}.json  # testing pointer-trajectory records
 ```
 
-Use `human` as `observer` for people; agent IDs include observer, provider,
-and model (for example `codex_openai_gpt-5`). The UTC timestamp documents run
+Use an `H` participant ID for people and an `A` participant ID for agents.
+Agent metadata includes the provider and the exact model label supplied in the
+URL (for example `openai` and `gpt-5.6-luna`). The UTC timestamp documents run
 start time; the random eight-character suffix prevents concurrent filename
-collisions. Store `session_id`, `observer_type`, `agent_provider`,
+collisions. Store `session_id`, `observer_type`, `participant_id`, `agent_provider`,
 `agent_model`, and ISO-8601 `started_at_utc` as structured fields in the
 results JSON, not only in its filename.
 

@@ -22,12 +22,14 @@ Canonical development URLs are:
 
 ```text
 https://vibe-9d6e5.web.app
-https://<host>/tasks/visual-similarity?run=development&observer=human&participant_id=P001
-https://<host>/tasks/object-matching?run=development&observer=human&participant_id=P001
+https://<host>/tasks/visual-similarity?run=development&participant_id=H001
+https://<host>/tasks/object-matching?run=development&participant_id=H001
 ```
 
-Omit `run=development` for a full run. Agent runs use the same task URLs with
-`observer=agent` and their run metadata in the query string.
+Omit `run=development` for a full run. Participant IDs beginning with `H` are
+human sessions; IDs beginning with `A` are agent sessions. Agent runs add
+`provider`, `model`, and optionally `agent_name` in the query string. The
+legacy `observer` parameter is ignored.
 
 ## Results API
 
@@ -67,11 +69,10 @@ request-size limits, CORS origin allowlist, and storage access controls.
 
 ## Hosting templates
 
-`firebase.json` deploys **static Firebase Hosting only**. It contains no
-Cloud Function rewrite and does not deploy a Functions package. Before
-collecting unattended production data on Firebase Hosting, deploy a separate
-Cloud Function (or another API) that validates and stores the HTTP contract,
-for example in Firestore, then build with its URL in `VITE_RESULTS_ENDPOINT`.
+`firebase.json` deploys Firebase Hosting together with the configured
+`saveSession` Cloud Function rewrite. Deploy the Functions package before
+collecting unattended production data. If you use another API instead, build
+with its URL in `VITE_RESULTS_ENDPOINT`; the browser contract stays the same.
 
 `netlify.toml` configures the build output and task fallback for Netlify.
 `vercel.json` provides the equivalent Vercel configuration. `public/_redirects`

@@ -406,8 +406,8 @@ Run: `npm run dev -- --host 127.0.0.1`
 Open these normal-browser URLs and confirm each reaches the instruction screen without a manifest error:
 
 ```text
-http://127.0.0.1:5173/tasks/visual-similarity?run=development&observer=human&participant_id=deploy-check
-http://127.0.0.1:5173/tasks/object-matching?run=development&observer=human&participant_id=deploy-check
+http://127.0.0.1:5173/tasks/visual-similarity?run=development&participant_id=H001
+http://127.0.0.1:5173/tasks/object-matching?run=development&participant_id=H001
 ```
 
 Stop Vite after the smoke check. Complete a development run only if required to recheck local result writes.

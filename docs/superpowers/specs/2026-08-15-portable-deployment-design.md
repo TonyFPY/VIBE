@@ -29,8 +29,8 @@ default. `mode=development` remains supported as a compatibility alias.
 Examples:
 
 ```text
-/tasks/visual-similarity?run=development&observer=human&participant_id=P001
-/tasks/object-matching?observer=agent&provider=bedrock&model=model-id&agent_name=agent-run
+/tasks/visual-similarity?run=development&participant_id=H001
+/tasks/object-matching?participant_id=A001&provider=bedrock&model=model-id&agent_name=agent-run
 ```
 
 Unknown task paths must render a participant-safe unavailable screen; they must
