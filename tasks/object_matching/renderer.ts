@@ -31,7 +31,7 @@ export class ObjectMatchingInstructionPlugin {
         <p class="vs-eyebrow">Object matching</p>
         <h2>Which object belongs with the reference?</h2>
         <p>Click the center cross to start each trial.</p>
-        <p>Choose and click one image around the centered reference.</p>
+        <p>Click one image around the centered reference.</p>
         <p>You will start with some training trials. </p>
         <p>Please do not refresh or close this window.</p>
         <button class="vs-primary" type="button">Start</button>
