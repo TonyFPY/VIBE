@@ -74,7 +74,7 @@ export const scoreResponse = (selectedSide: Side, correctSide: Side) => selected
 export const trainingAlignmentFeedback = (correct: boolean) => (
   correct ? "Aligned with most human responses" : "Not aligned with most human responses"
 );
-export const trainingAlignmentFeedbackDuration = (correct: boolean) => correct ? 650 : 1000;
+export const trainingAlignmentFeedbackDuration = (correct: boolean) => correct ? 1000 : 1200;
 export const toPublicTrial = (trial: DreamSimTrial): PublicTrial => ({
   referenceImage: trial.referenceImage,
   leftCandidate: trial.leftCandidate,

@@ -99,7 +99,7 @@ export function selectObjectMatchingRunPhases(
 
 export const scoreObjectMatchingResponse = (selectedLabel: number, correctLabel: number) => selectedLabel === correctLabel;
 export const objectMatchingFeedback = (correct: boolean) => correct
-  ? { text: "Correct", className: "om-feedback-correct", durationMs: 650 }
+  ? { text: "Correct", className: "om-feedback-correct", durationMs: 750 }
   : { text: "Incorrect", className: "om-feedback-incorrect", durationMs: 1000 };
 export const isObjectMatchingViewportSupported = isTrialViewportSupported;
 
