@@ -3,7 +3,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  normalizePointer,
+  pointerTupleAtCross,
+  shouldSamplePointer,
   parseDreamSimCsv,
   scoreResponse,
   selectRunPhases,
@@ -62,15 +63,13 @@ describe("visual similarity task", () => {
     expect(scoreResponse("right", "left")).toBe(false);
   });
 
-  it("normalizes a pointer sample against the trial area and center", () => {
-    expect(normalizePointer({ x: 600, y: 300 }, { left: 100, top: 100, width: 1000, height: 500 })).toEqual({
-      xRaw: 600,
-      yRaw: 300,
-      xNorm: 0.5,
-      yNorm: 0.4,
-      xCentered: 0,
-      yCentered: -0.1,
-    });
+  it("encodes a pointer sample as a rounded cross-centered pixel tuple", () => {
+    expect(pointerTupleAtCross({ x: 600.4, y: 300.4 }, { x: 540, y: 338 }, 16.8)).toEqual([17, 60, -38]);
+  });
+
+  it("keeps intermediate samples only after enough time and movement", () => {
+    expect(shouldSamplePointer([0, 0, 0], [16, 1, 1])).toBe(false);
+    expect(shouldSamplePointer([0, 0, 0], [16, 2, 0])).toBe(true);
   });
 
   it("calculates reaction time from center-cross click to response", () => {
@@ -155,7 +154,7 @@ describe("visual similarity task", () => {
     const plugin = new VisualSimilarityPlugin({ finishTrial: () => undefined } as never);
     const [trial] = parseDreamSimCsv("id,left_vote,right_vote,ref_path,left_path,right_path\n1,1,0,ref/a.png,left/a.png,right/a.png");
     const display = document.createElement("div");
-    let recorded: Array<{ xRaw: number; yRaw: number }> = [];
+    let recorded: Array<{ trialId: string; points: Array<[number, number, number]> }> = [];
 
     plugin.trial(display, {
       trial,
@@ -180,12 +179,11 @@ describe("visual similarity task", () => {
       new MouseEvent("click", { bubbles: true, clientX: 800, clientY: 338 }),
     );
 
-    expect(recorded.map(({ xRaw, yRaw }) => ({ xRaw, yRaw }))).toEqual([
-      { xRaw: 540, yRaw: 338 },
-      { xRaw: 600, yRaw: 338 },
-      { xRaw: 800, yRaw: 338 },
-      { xRaw: 800, yRaw: 338 },
-    ]);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0].trialId).toBe(trial.id);
+    expect(recorded[0].points).toHaveLength(2);
+    expect(recorded[0].points[0]).toEqual([0, 0, 0]);
+    expect(recorded[0].points[1].slice(1)).toEqual([260, 0]);
   });
 
   it("uses human-readable alignment feedback during training", () => {

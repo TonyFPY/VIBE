@@ -15,13 +15,18 @@ center-cross click → begin recording
 first candidate response → stop recording
 ```
 
-Every recorded testing trajectory has explicit endpoints: sample `0` is the
-center-cross click with elapsed time `0`, and the final sample is the selected
-candidate click. Real `pointermove` events between them remain intermediate
-samples. Each `TrajectoryPoint` has a trial ID, ordered sample index,
-timestamp, elapsed time from the cross click, raw viewport coordinates, and
-normalized coordinates. Training trials do not contribute result or trajectory
-records.
+Every recorded testing trajectory is one compact per-trial record:
+
+```json
+{"trialId":"12","points":[[0,0,0],[17,14,-3],[34,31,-7]]}
+```
+
+Each tuple is `[elapsedMs, xPx, yPx]`: integer milliseconds after the
+center-cross click, then integer CSS-pixel offsets from that click. The first
+tuple is always `[0,0,0]`; the final tuple is the selected candidate click.
+Intermediate `pointermove` events are retained only when they are at least
+16 ms and 2 px from the prior stored tuple. Training trials do not contribute
+result or trajectory records.
 
 The visual-similarity and object-matching renderers both add the collected
 points to the same session payload that records responses. No agent-specific

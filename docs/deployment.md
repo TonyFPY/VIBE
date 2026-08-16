@@ -21,6 +21,7 @@ approximately 135 MB of stimulus assets.
 Canonical development URLs are:
 
 ```text
+https://vibe-9d6e5.web.app
 https://<host>/tasks/visual-similarity?run=development&observer=human&participant_id=P001
 https://<host>/tasks/object-matching?run=development&observer=human&participant_id=P001
 ```

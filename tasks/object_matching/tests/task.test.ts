@@ -132,7 +132,7 @@ describe("object matching task", () => {
     const [trial] = parseObjectMatchingCsv(`${header}\n${row(0)}`);
     const display = document.createElement("div");
     const plugin = new ObjectMatchingPlugin({ finishTrial: () => undefined } as never);
-    let recorded: Array<{ xRaw: number; yRaw: number }> = [];
+    let recorded: Array<{ trialId: string; points: Array<[number, number, number]> }> = [];
 
     plugin.trial(display, {
       trial,
@@ -156,10 +156,10 @@ describe("object matching task", () => {
       new MouseEvent("click", { bubbles: true, clientX: 800, clientY: 338 }),
     );
 
-    expect(recorded.map(({ xRaw, yRaw }) => ({ xRaw, yRaw }))).toEqual([
-      { xRaw: 540, yRaw: 338 },
-      { xRaw: 600, yRaw: 338 },
-      { xRaw: 800, yRaw: 338 },
-    ]);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0].trialId).toBe(trial.id);
+    expect(recorded[0].points).toHaveLength(2);
+    expect(recorded[0].points[0]).toEqual([0, 0, 0]);
+    expect(recorded[0].points[1].slice(1)).toEqual([260, 0]);
   });
 });

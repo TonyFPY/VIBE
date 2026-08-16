@@ -1,7 +1,7 @@
 import { ParameterType, type JsPsych } from "jspsych";
 
-import { calculateReactionTimeMs, isTrialViewportSupported, normalizePointer, TRIAL_CANVAS } from "../shared/experiment/geometry";
-import type { ObjectMatchingTrialResult, TrajectoryPoint } from "../shared/experiment/types";
+import { calculateReactionTimeMs, isTrialViewportSupported, pointerTupleAtCross, shouldSamplePointer, TRIAL_CANVAS, type PointerTuple } from "../shared/experiment/geometry";
+import type { ObjectMatchingTrialResult, TrialTrajectory } from "../shared/experiment/types";
 import {
   objectMatchingFeedback,
   scoreObjectMatchingResponse,
@@ -17,7 +17,7 @@ export interface ObjectMatchingTrialParameters {
   trialNumber: number;
   totalInPhase: number;
   prepare: () => Promise<void>;
-  onComplete: (result: ObjectMatchingTrialResult, trajectory: TrajectoryPoint[]) => void;
+  onComplete: (result: ObjectMatchingTrialResult, trajectory: TrialTrajectory[]) => void;
 }
 
 export class ObjectMatchingInstructionPlugin {
@@ -140,27 +140,15 @@ export class ObjectMatchingPlugin {
       </section>`;
 
     const trialArea = displayElement.querySelector<HTMLElement>(".vs-trial")!;
-    const trajectories: TrajectoryPoint[] = [];
+    const points: PointerTuple[] = parameters.phase === "testing" ? [[0, 0, 0]] : [];
     const onPointerMove = (event: PointerEvent) => {
       if (parameters.phase !== "testing") return;
-      const rectangle = trialArea.getBoundingClientRect();
-      trajectories.push({
-        trialId: parameters.trial.id,
-        sampleIndex: trajectories.length,
-        timestamp: performance.now(),
-        elapsedMsFromCrossClick: performance.now() - timing.crossClickedAt,
-        ...normalizePointer({ x: event.clientX, y: event.clientY }, rectangle),
-      });
-    };
-    if (parameters.phase === "testing") {
-      const rectangle = trialArea.getBoundingClientRect();
-      trajectories.push({
-        trialId: parameters.trial.id,
-        sampleIndex: trajectories.length,
-        timestamp: timing.crossClickedAt,
-        elapsedMsFromCrossClick: 0,
-        ...normalizePointer({ x: timing.crossClickX, y: timing.crossClickY }, rectangle),
-      });
+      const point = pointerTupleAtCross(
+        { x: event.clientX, y: event.clientY },
+        { x: timing.crossClickX, y: timing.crossClickY },
+        performance.now() - timing.crossClickedAt,
+      );
+      if (shouldSamplePointer(points.at(-1)!, point)) points.push(point);
     }
     trialArea.addEventListener("pointermove", onPointerMove);
 
@@ -171,14 +159,11 @@ export class ObjectMatchingPlugin {
       trialArea.removeEventListener("pointermove", onPointerMove);
       const responseAt = performance.now();
       if (parameters.phase === "testing") {
-        const rectangle = trialArea.getBoundingClientRect();
-        trajectories.push({
-          trialId: parameters.trial.id,
-          sampleIndex: trajectories.length,
-          timestamp: responseAt,
-          elapsedMsFromCrossClick: responseAt - timing.crossClickedAt,
-          ...normalizePointer({ x: event.clientX, y: event.clientY }, rectangle),
-        });
+        points.push(pointerTupleAtCross(
+          { x: event.clientX, y: event.clientY },
+          { x: timing.crossClickX, y: timing.crossClickY },
+          responseAt - timing.crossClickedAt,
+        ));
       }
       const result: ObjectMatchingTrialResult = {
         task: "object_matching",
@@ -204,7 +189,7 @@ export class ObjectMatchingPlugin {
         prefetchStartedAt: timing.prefetchStartedAt,
         prefetchCompletedAt: timing.prefetchCompletedAt,
       };
-      parameters.onComplete(result, trajectories);
+      parameters.onComplete(result, parameters.phase === "testing" ? [{ trialId: parameters.trial.id, points }] : []);
       if (parameters.phase === "training") {
         const feedback = objectMatchingFeedback(result.correct);
         displayElement.innerHTML = `<section class="vs-feedback ${feedback.className}">${feedback.text}</section>`;

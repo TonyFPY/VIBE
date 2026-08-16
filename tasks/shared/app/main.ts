@@ -4,7 +4,7 @@ import "jspsych/css/jspsych.css";
 import { parseLaunch } from "./launch";
 import { createSessionIdentity } from "../experiment/session";
 import { clearRecovery, saveRecovery, submitSession } from "../experiment/persistence";
-import { isRecordedPhase, type ExperimentTrialResult, type ObjectMatchingTrialResult, type SessionPayload, type TrajectoryPoint, type TrialResult } from "../experiment/types";
+import { isRecordedPhase, type ExperimentTrialResult, type ObjectMatchingTrialResult, type SessionPayload, type TrialResult, type TrialTrajectory } from "../experiment/types";
 import {
   ObjectMatchingInstructionPlugin,
   ObjectMatchingPlugin,
@@ -32,7 +32,7 @@ import "./styles.css";
 const root = document.querySelector<HTMLElement>("#app")!;
 const identity = createSessionIdentity();
 const results: ExperimentTrialResult[] = [];
-const trajectories: TrajectoryPoint[] = [];
+const trajectories: TrialTrajectory[] = [];
 
 function payload(): SessionPayload { return { session: identity, results, trajectories }; }
 function checkpoint(): void { saveRecovery(payload()); }
@@ -77,7 +77,7 @@ function timelineFor(phase: "training" | "testing", trials: DreamSimTrial[]) {
     trialNumber: index + 1,
     totalInPhase: trials.length,
     prepare: () => buffer.prepare(index),
-    onComplete: (result: TrialResult, points: TrajectoryPoint[]) => {
+    onComplete: (result: TrialResult, points: TrialTrajectory[]) => {
       if (!isRecordedPhase(result.phase)) return;
       results.push(result);
       trajectories.push(...points);
@@ -95,7 +95,7 @@ function objectMatchingTimelineFor(phase: "training" | "testing", trials: Object
     trialNumber: index + 1,
     totalInPhase: trials.length,
     prepare: () => buffer.prepare(index),
-    onComplete: (result: ObjectMatchingTrialResult, points: TrajectoryPoint[]) => {
+    onComplete: (result: ObjectMatchingTrialResult, points: TrialTrajectory[]) => {
       if (!isRecordedPhase(result.phase)) return;
       results.push(result);
       trajectories.push(...points);

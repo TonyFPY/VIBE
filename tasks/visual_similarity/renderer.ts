@@ -1,8 +1,9 @@
 import { ParameterType, type JsPsych } from "jspsych";
 
-import { isTrialViewportSupported, normalizePointer, scoreResponse, toPublicTrial, trainingAlignmentFeedback, trainingAlignmentFeedbackDuration, TRIAL_CANVAS, type DreamSimTrial } from "./task";
+import { isTrialViewportSupported, pointerTupleAtCross, scoreResponse, shouldSamplePointer, toPublicTrial, trainingAlignmentFeedback, trainingAlignmentFeedbackDuration, TRIAL_CANVAS, type DreamSimTrial } from "./task";
 import { calculateReactionTimeMs } from "../shared/experiment/geometry";
-import type { Side, TrajectoryPoint, TrialResult } from "../shared/experiment/types";
+import type { PointerTuple } from "../shared/experiment/geometry";
+import type { Side, TrialTrajectory, TrialResult } from "../shared/experiment/types";
 
 type Phase = "training" | "testing";
 
@@ -12,7 +13,7 @@ export interface VisualTrialParameters {
   trialNumber: number;
   totalInPhase: number;
   prepare: () => Promise<void>;
-  onComplete: (result: TrialResult, trajectory: TrajectoryPoint[]) => void;
+  onComplete: (result: TrialResult, trajectory: TrialTrajectory[]) => void;
 }
 
 export class InstructionPlugin {
@@ -136,28 +137,15 @@ export class VisualSimilarityPlugin {
       </section>`;
 
     const trialArea = displayElement.querySelector<HTMLElement>(".vs-trial")!;
-    const trajectories: TrajectoryPoint[] = [];
+    const points: PointerTuple[] = parameters.phase === "testing" ? [[0, 0, 0]] : [];
     const onPointerMove = (event: PointerEvent) => {
       if (parameters.phase !== "testing") return;
-      const rectangle = trialArea.getBoundingClientRect();
-      const normalized = normalizePointer({ x: event.clientX, y: event.clientY }, rectangle);
-      trajectories.push({
-        trialId: parameters.trial.id,
-        sampleIndex: trajectories.length,
-        timestamp: performance.now(),
-        elapsedMsFromCrossClick: performance.now() - timing.crossClickedAt,
-        ...normalized,
-      });
-    };
-    if (parameters.phase === "testing") {
-      const rectangle = trialArea.getBoundingClientRect();
-      trajectories.push({
-        trialId: parameters.trial.id,
-        sampleIndex: trajectories.length,
-        timestamp: timing.crossClickedAt,
-        elapsedMsFromCrossClick: 0,
-        ...normalizePointer({ x: timing.crossClickX, y: timing.crossClickY }, rectangle),
-      });
+      const point = pointerTupleAtCross(
+        { x: event.clientX, y: event.clientY },
+        { x: timing.crossClickX, y: timing.crossClickY },
+        performance.now() - timing.crossClickedAt,
+      );
+      if (shouldSamplePointer(points.at(-1)!, point)) points.push(point);
     }
     trialArea.addEventListener("pointermove", onPointerMove);
 
@@ -168,14 +156,11 @@ export class VisualSimilarityPlugin {
       trialArea.removeEventListener("pointermove", onPointerMove);
       const responseAt = performance.now();
       if (parameters.phase === "testing") {
-        const rectangle = trialArea.getBoundingClientRect();
-        trajectories.push({
-          trialId: parameters.trial.id,
-          sampleIndex: trajectories.length,
-          timestamp: responseAt,
-          elapsedMsFromCrossClick: responseAt - timing.crossClickedAt,
-          ...normalizePointer({ x: event.clientX, y: event.clientY }, rectangle),
-        });
+        points.push(pointerTupleAtCross(
+          { x: event.clientX, y: event.clientY },
+          { x: timing.crossClickX, y: timing.crossClickY },
+          responseAt - timing.crossClickedAt,
+        ));
       }
       const result: TrialResult = {
         task: "visual_similarity",
@@ -201,7 +186,7 @@ export class VisualSimilarityPlugin {
         prefetchStartedAt: timing.prefetchStartedAt,
         prefetchCompletedAt: timing.prefetchCompletedAt,
       };
-      parameters.onComplete(result, trajectories);
+      parameters.onComplete(result, parameters.phase === "testing" ? [{ trialId: parameters.trial.id, points }] : []);
       if (parameters.phase === "training") {
         displayElement.innerHTML = `<section class="vs-feedback ${result.correct ? "is-correct" : "is-incorrect"}">${trainingAlignmentFeedback(result.correct)}</section>`;
         this.jsPsych.pluginAPI.setTimeout(() => this.jsPsych.finishTrial(), trainingAlignmentFeedbackDuration(result.correct));

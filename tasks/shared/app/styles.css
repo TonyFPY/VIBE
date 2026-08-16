@@ -30,7 +30,7 @@ button { font: inherit; }
 .vs-candidate:hover { border: 4px solid #8a8a8a; }
 .vs-candidate:focus-visible { outline: 2px solid #1c1c1c; outline-offset: 3px; }
 .vs-stimulus-label { position: absolute; top: calc(100% + 10px); left: 0; width: 100%; margin: 0; color: #444; font-size: .85rem; font-weight: 700; text-align: center; }
-.vs-cross-slot { position: absolute; top: 50%; left: 50%; display: grid; width: 40px; height: 40px; place-items: center; transform: translate(-50%, -50%); }
+.vs-cross-slot { position: absolute; top: 50%; left: 50%; display: grid; width: 20px; height: 20px; place-items: center; transform: translate(-50%, -50%); }
 .vs-cross { width: 20px; height: 20px; border: 0; background: transparent; color: #1c1c1c; font-size: 2.25rem; cursor: pointer; }
 .om-stimulus-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 160px); grid-template-rows: repeat(3, 160px); column-gap: 120px; row-gap: 40px; place-content: center; }
 .om-stimulus-item { position: relative; display: grid; width: 160px; height: 160px; margin: 0; place-items: start center; }
@@ -40,7 +40,7 @@ button { font: inherit; }
 .om-candidate:hover { border: 4px solid #8a8a8a; }
 .om-candidate:focus-visible { outline: 2px solid #1c1c1c; outline-offset: 3px; }
 .om-reference .om-image-frame { width: 160px; height: 160px; }
-.om-cross-slot { position: absolute; top: 50%; left: 50%; display: grid; width: 40px; height: 40px; place-items: center; transform: translate(-50%, -50%); }
+.om-cross-slot { position: absolute; top: 50%; left: 50%; display: grid; width: 20px; height: 20px; place-items: center; transform: translate(-50%, -50%); }
 .om-cross { width: 20px; height: 20px; border: 0; background: transparent; color: #1c1c1c; font-size: 2.25rem; cursor: pointer; }
 .om-reference .om-image-frame { border: 3px solid #1c1c1c; }
 .om-stimulus-label { position: absolute; top: calc(100% + 6px); left: 0; width: 100%; margin: 0; color: #444; font-size: .8rem; font-weight: 700; text-align: center; }

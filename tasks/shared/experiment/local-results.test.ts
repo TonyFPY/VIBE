@@ -19,7 +19,7 @@ function payload() {
       randomSeed: 1,
     },
     results: [{ task: "visual_similarity", trialId: "4" }],
-    trajectories: [{ trialId: "4", sampleIndex: 0, xRaw: 540, yRaw: 338 }],
+    trajectories: [{ trialId: "4", points: [[0, 0, 0]] }],
   };
 }
 

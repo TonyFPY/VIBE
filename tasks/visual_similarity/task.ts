@@ -1,12 +1,12 @@
 import type { Side } from "../shared/experiment/types";
 import {
   isTrialViewportSupported,
-  normalizePointer,
+  pointerTupleAtCross,
+  shouldSamplePointer,
   TRIAL_CANVAS,
-  type TrialArea,
 } from "../shared/experiment/geometry";
 
-export { isTrialViewportSupported, normalizePointer, TRIAL_CANVAS, type TrialArea } from "../shared/experiment/geometry";
+export { isTrialViewportSupported, pointerTupleAtCross, shouldSamplePointer, TRIAL_CANVAS } from "../shared/experiment/geometry";
 
 export interface DreamSimTrial {
   id: string;

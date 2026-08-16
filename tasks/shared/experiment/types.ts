@@ -15,17 +15,9 @@ export interface SessionIdentity {
   randomSeed: number;
 }
 
-export interface TrajectoryPoint {
+export interface TrialTrajectory {
   trialId: string;
-  sampleIndex: number;
-  timestamp: number;
-  elapsedMsFromCrossClick: number;
-  xRaw: number;
-  yRaw: number;
-  xNorm: number;
-  yNorm: number;
-  xCentered: number;
-  yCentered: number;
+  points: Array<[elapsedMs: number, xPx: number, yPx: number]>;
 }
 
 export interface VisualSimilarityTrialResult {
@@ -84,5 +76,5 @@ export type ExperimentTrialResult = VisualSimilarityTrialResult | ObjectMatching
 export interface SessionPayload {
   session: SessionIdentity;
   results: ExperimentTrialResult[];
-  trajectories: TrajectoryPoint[];
+  trajectories: TrialTrajectory[];
 }

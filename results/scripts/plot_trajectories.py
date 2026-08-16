@@ -50,39 +50,44 @@ def discover_sessions(
     return sessions
 
 
-def _sample_index(point: dict[str, Any]) -> float:
-    value = point.get("sampleIndex", 0)
+def _elapsed_ms(point: list[Any]) -> float:
+    value = point[0]
     try:
         return float(value)
     except (TypeError, ValueError):
         return math.inf
 
 
-def _has_centered_coordinates(point: dict[str, Any]) -> bool:
-    try:
-        x = float(point["xCentered"])
-        y = float(point["yCentered"])
-    except (KeyError, TypeError, ValueError):
+def _is_pixel_tuple(point: Any) -> bool:
+    if not isinstance(point, list) or len(point) != 3:
         return False
-    return math.isfinite(x) and math.isfinite(y)
+    try:
+        elapsed_ms, x_px, y_px = (float(value) for value in point)
+    except (TypeError, ValueError):
+        return False
+    return all(math.isfinite(value) for value in (elapsed_ms, x_px, y_px))
 
 
 def group_trajectories(
-    points: list[dict[str, Any]],
-) -> list[tuple[str, list[dict[str, Any]]]]:
-    """Group valid points by trial, preserving trial and sample order."""
-    grouped: dict[str, list[dict[str, Any]]] = {}
+    trajectories: list[dict[str, Any]],
+) -> list[tuple[str, list[list[Any]]]]:
+    """Group valid compact trial traces by trial and elapsed time."""
+    grouped: dict[str, list[list[Any]]] = {}
     trial_order: list[str] = []
-    for point in points:
-        trial_id = point.get("trialId")
-        if not isinstance(trial_id, str) or not _has_centered_coordinates(point):
+    for trajectory in trajectories:
+        trial_id = trajectory.get("trialId")
+        points = trajectory.get("points")
+        if not isinstance(trial_id, str) or not isinstance(points, list):
+            continue
+        valid_points = [point for point in points if _is_pixel_tuple(point)]
+        if not valid_points:
             continue
         if trial_id not in grouped:
             grouped[trial_id] = []
             trial_order.append(trial_id)
-        grouped[trial_id].append(point)
+        grouped[trial_id].extend(valid_points)
     return [
-        (trial_id, sorted(grouped[trial_id], key=_sample_index))
+        (trial_id, sorted(grouped[trial_id], key=_elapsed_ms))
         for trial_id in trial_order
     ]
 
@@ -99,8 +104,8 @@ def plot_session(payload: dict[str, Any], task: str, output_root: Path) -> Path 
     if not isinstance(session_id, str) or not session_id:
         warnings.warn("Skipping payload with no session ID")
         return None
-    points = payload.get("trajectories", [])
-    groups = group_trajectories(points if isinstance(points, list) else [])
+    trajectories = payload.get("trajectories", [])
+    groups = group_trajectories(trajectories if isinstance(trajectories, list) else [])
     if not groups:
         warnings.warn(f"Skipping {session_id}: no usable trajectory points")
         return None
@@ -110,8 +115,8 @@ def plot_session(payload: dict[str, Any], task: str, output_root: Path) -> Path 
     cmap = sns.color_palette("crest", as_cmap=True)
     color_values = range(len(groups))
     for index, (trial_id, trial_points) in enumerate(groups):
-        x_values = [float(point["xCentered"]) for point in trial_points]
-        y_values = [float(point["yCentered"]) for point in trial_points]
+        x_values = [float(point[1]) for point in trial_points]
+        y_values = [float(point[2]) for point in trial_points]
         color = cmap(index / max(len(groups) - 1, 1))
         ax.plot(x_values, y_values, color=color, alpha=0.66, linewidth=1.5)
         ax.scatter(x_values[0], y_values[0], color=color, s=18, alpha=0.9, edgecolor="white", linewidth=0.4)
@@ -122,8 +127,8 @@ def plot_session(payload: dict[str, Any], task: str, output_root: Path) -> Path 
     ax.scatter([0], [0], color="#26352d", marker="+", s=62, linewidths=1.4, zorder=4)
     ax.set_aspect("equal", adjustable="datalim")
     ax.invert_yaxis()
-    ax.set_xlabel("Centered x", labelpad=8)
-    ax.set_ylabel("Centered y", labelpad=8)
+    ax.set_xlabel("x (px)", labelpad=8)
+    ax.set_ylabel("y (px)", labelpad=8)
     observer = session.get("observerType", "unknown") if isinstance(session, dict) else "unknown"
     pretty_task = task.replace("_", " ").title()
     ax.set_title(f"{pretty_task} · {str(observer).title()}", loc="left", pad=14, fontsize=16, fontweight="bold", color="#26352d")
