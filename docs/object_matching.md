@@ -37,12 +37,12 @@ other value, for the complete run.
 Use the same launch metadata as visual similarity:
 
 ```text
-?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex
+?participant_id=A001&model=gpt-5
 ```
 
 Participant IDs beginning with `H` identify human launches; IDs beginning with
-`A` identify agent launches. Agent launches also supply `provider`, `model`,
-and optionally `agent_name`. The agent never types identity into the UI.
+`A` identify agent launches. Agent launches supply `model`; `provider` and
+`agent_name` are optional metadata. The agent never types identity into the UI.
 
 ```bash
 npm install
@@ -60,7 +60,7 @@ http://127.0.0.1:5173/tasks/object-matching?participant_id=H001&mode=development
 http://127.0.0.1:5173/tasks/object-matching?participant_id=H001
 
 # Agent developer test
-http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex&mode=development
+http://127.0.0.1:5173/tasks/object-matching?participant_id=A001&model=gpt-5&mode=development
 ```
 
 Run the subset command before deployment or after changing `data_100.csv`.

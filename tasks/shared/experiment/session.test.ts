@@ -36,6 +36,17 @@ describe("session identity", () => {
     expect(session.sessionId).toMatch(/^A001_openai_gpt-5-6-luna_/);
   });
 
+  it("allows agent launches to omit provider and agent name", () => {
+    const session = createSessionIdentity("?participant_id=A002&model=external-model");
+
+    expect(session).toMatchObject({
+      observerType: "agent",
+      agentProvider: "unknown",
+      agentModel: "external-model",
+      agentName: "agent",
+    });
+  });
+
   it("marks development sessions in their metadata and ID", () => {
     const session = createSessionIdentity(
       "?participant_id=A001&provider=openai&model=test&agent_name=codex&run=development",

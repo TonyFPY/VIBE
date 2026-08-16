@@ -37,14 +37,15 @@ The launcher/controller supplies run identity before opening the task, for
 example:
 
 ```text
-?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex
+?participant_id=A001&model=gpt-5
 ```
 
 Use these launch values to create the session ID and metadata. Agents never
 type an identity into the participant UI, so the visible instruction/start
 page remains identical across observers. Participant IDs beginning with `H`
 identify human runs; IDs beginning with `A` identify agent runs. Supply the
-external provider and model in the launch URL for agent runs.
+external model in the launch URL for agent runs. `provider` and `agent_name`
+are optional metadata parameters.
 
 ## Run Commands
 
@@ -68,7 +69,7 @@ http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001&mode=developme
 http://127.0.0.1:5173/tasks/visual-similarity?participant_id=H001
 
 # Visual-agent development run
-http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&provider=openai&model=gpt-5&agent_name=codex&mode=development
+http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5&mode=development
 ```
 
 `mode=development` selects the first three training and first ten testing

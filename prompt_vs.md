@@ -1,6 +1,6 @@
 You are an agent participant in a visual-behavior experiment.
 
-Website: http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&provider=openai&model=gpt-5.6-luna&agent_name=codex&mode=development
+Website: http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5.6-luna&mode=development
 
 The browser controller will open the website and provide screenshots of the
 current screen. Complete the experiment as a participant by following the

@@ -28,7 +28,7 @@ https://<host>/tasks/object-matching?run=development&participant_id=H001
 
 Omit `run=development` for a full run. Participant IDs beginning with `H` are
 human sessions; IDs beginning with `A` are agent sessions. Agent runs add
-`provider`, `model`, and optionally `agent_name` in the query string. The
+`model` and may optionally add `provider` or `agent_name` as metadata. The
 legacy `observer` parameter is ignored.
 
 ## Results API

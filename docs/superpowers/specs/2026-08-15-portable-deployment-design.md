@@ -30,7 +30,7 @@ Examples:
 
 ```text
 /tasks/visual-similarity?run=development&participant_id=H001
-/tasks/object-matching?participant_id=A001&provider=bedrock&model=model-id&agent_name=agent-run
+/tasks/object-matching?participant_id=A001&model=model-id
 ```
 
 Unknown task paths must render a participant-safe unavailable screen; they must
