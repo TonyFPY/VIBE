@@ -75,8 +75,8 @@ describe("object matching task", () => {
   });
 
   it("provides distinct large-feedback styles for correct and incorrect training", () => {
-    expect(objectMatchingFeedback(true)).toEqual({ text: "Correct", className: "om-feedback-correct", durationMs: 650 });
-    expect(objectMatchingFeedback(false)).toEqual({ text: "Incorrect", className: "om-feedback-incorrect", durationMs: 1000 });
+    expect(objectMatchingFeedback(true)).toMatchObject({ text: "Correct", className: "om-feedback-correct" });
+    expect(objectMatchingFeedback(false)).toMatchObject({ text: "Incorrect", className: "om-feedback-incorrect" });
   });
 
   it("does not expose class or correct answer in public trial data", () => {

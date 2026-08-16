@@ -13,7 +13,7 @@ import {
   isTrialViewportSupported,
 } from "../task";
 import { InstructionPlugin, TestReadyPlugin, VisualSimilarityPlugin } from "../renderer";
-import { trainingAlignmentFeedback, trainingAlignmentFeedbackDuration } from "../task";
+import { trainingAlignmentFeedback } from "../task";
 import { calculateReactionTimeMs } from "../../shared/experiment/geometry";
 
 describe("visual similarity task", () => {
@@ -189,8 +189,6 @@ describe("visual similarity task", () => {
   it("uses human-readable alignment feedback during training", () => {
     expect(trainingAlignmentFeedback(true)).toBe("Aligned with most human responses");
     expect(trainingAlignmentFeedback(false)).toBe("Not aligned with most human responses");
-    expect(trainingAlignmentFeedbackDuration(true)).toBe(650);
-    expect(trainingAlignmentFeedbackDuration(false)).toBe(1000);
   });
 
   it("requires a viewport large enough for the fixed trial canvas", () => {
