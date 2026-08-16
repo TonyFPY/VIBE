@@ -51,8 +51,8 @@ export async function submitSession(
 
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? 10_000;
-  const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 3));
-  const sleep = options.sleep ?? ((delayMs: number) => new Promise<void>((resolve) => window.setTimeout(resolve, delayMs)));
+  const maxAttempts = Math.min(3, Math.max(1, Math.floor(options.maxAttempts ?? 3)));
+  const sleep = options.sleep ?? ((delayMs: number) => new Promise<void>((resolve) => globalThis.setTimeout(resolve, delayMs)));
   const body = JSON.stringify(payload);
   const headers = {
     "Content-Type": "application/json",
@@ -82,7 +82,7 @@ export async function submitSession(
         return;
       }
     } catch (error) {
-      if (timedOut || (error instanceof DOMException && error.name === "AbortError")) {
+      if (timedOut || (error instanceof Error && error.name === "AbortError")) {
         lastError = new SaveAttemptError("timeout", "Results API request timed out");
       } else {
         lastError = new SaveAttemptError("network", "Results API request failed");

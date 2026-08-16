@@ -3,8 +3,9 @@ import "jspsych/css/jspsych.css";
 
 import { parseLaunch } from "./launch";
 import { createSessionIdentity } from "../experiment/session";
-import { clearRecovery, saveRecovery, submitSession } from "../experiment/persistence";
+import { resultsEndpoint, saveRecovery } from "../experiment/persistence";
 import { isRecordedPhase, type ExperimentTrialResult, type ObjectMatchingTrialResult, type SessionPayload, type TrialResult, type TrialTrajectory } from "../experiment/types";
+import { finishSession } from "./save-flow";
 import {
   ObjectMatchingInstructionPlugin,
   ObjectMatchingPlugin,
@@ -50,22 +51,14 @@ function download(name: string, contents: unknown): void {
 }
 
 async function finish(): Promise<void> {
-  root.innerHTML = `<section class="vs-card"><p class="vs-eyebrow">Finalizing</p><h1>Saving your results…</h1><p>Please do not close this window.</p></section>`;
-  checkpoint();
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      await submitSession(payload());
-      clearRecovery(identity.sessionId);
-      root.innerHTML = `<section class="vs-card"><p class="vs-eyebrow">Complete</p><h1>Results saved successfully.</h1><p>This window will close automatically.</p></section>`;
-      window.setTimeout(() => window.close(), 900);
-      return;
-    } catch {
-      await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
-    }
-  }
-  root.innerHTML = `<section class="vs-card"><p class="vs-eyebrow">Save incomplete</p><h1>We are still saving your results.</h1><p>Your run remains safely stored in this browser. Download recovery copies or keep this window open and retry later.</p><div class="vs-actions"><button id="download-results" class="vs-primary">Download results</button><button id="download-trajectories" class="vs-secondary">Download trajectories</button></div></section>`;
-  document.querySelector("#download-results")?.addEventListener("click", () => download(`results/${identity.sessionId}.json`, { session: identity, results }));
-  document.querySelector("#download-trajectories")?.addEventListener("click", () => download(`trajectories/${identity.sessionId}.json`, { session: identity, trajectories }));
+  await finishSession({
+    root,
+    payload: payload(),
+    endpoint: resultsEndpoint(),
+    checkpoint,
+    download,
+    closeWindow: () => window.setTimeout(() => window.close(), 900),
+  });
 }
 
 function timelineFor(phase: "training" | "testing", trials: DreamSimTrial[]) {

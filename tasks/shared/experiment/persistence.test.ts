@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SessionPayload } from "./types";
-import { resultsEndpoint, submitSession, type SaveAttemptError } from "./persistence";
+import { resultsEndpoint, submitSession } from "./persistence";
 
 const payload = (): SessionPayload => ({
   session: {
@@ -67,7 +67,7 @@ describe("submitSession", () => {
       fetchImpl,
       maxAttempts: 3,
       sleep,
-    })).rejects.toMatchObject<Partial<SaveAttemptError>>({ kind: "network" });
+    })).rejects.toMatchObject({ kind: "network" });
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     expect(sleep).toHaveBeenCalledTimes(2);
