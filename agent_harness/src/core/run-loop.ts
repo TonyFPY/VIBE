@@ -34,6 +34,14 @@ function parseRawAction(rawOutput: string): ReturnType<typeof parseAgentAction> 
   return parseAgentAction(raw);
 }
 
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
 export class RunLoop {
   private readonly nowMs: () => number;
   private readonly nowIso: () => string;
@@ -140,6 +148,7 @@ export class RunLoop {
         }
 
         validationFeedback = undefined;
+        const screenshotBeforeAction = screenshot;
         const actionStartedAt = this.nowMs();
         const execution = await executeAgentAction(session, parsed.action);
         await this.dependencies.logger.log({
@@ -162,6 +171,9 @@ export class RunLoop {
           await this.beginTrial(session, config, summary, timing.actionAndLog);
         }
         screenshot = await this.captureObservation(session, config, summary, timing.screenshotAndLog);
+        if (parsed.action.type === "CLICK" && sameBytes(screenshotBeforeAction, screenshot)) {
+          validationFeedback = "The previous click caused no visible change; choose a different coordinate.";
+        }
       }
     } catch (error) {
       summary = { ...summary, status: "failed", failureReason: errorMessage(error) };

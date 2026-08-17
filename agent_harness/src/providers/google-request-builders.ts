@@ -13,6 +13,7 @@ export function buildPublicPrompt(request: ModelRequest): string {
   return [
     request.publicInstruction,
     "Use only the visible screenshot. Return exactly one JSON object and no other text.",
+    "Coordinates are screenshot pixels in the original 1080 x 675 screenshot: origin (0,0) is top-left, x increases right, and y increases down. If an action causes no visible change, choose a different coordinate.",
     "Allowed action shapes:",
     schemas,
     feedback,

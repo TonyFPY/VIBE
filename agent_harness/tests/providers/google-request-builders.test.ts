@@ -33,6 +33,7 @@ describe("Google Agent Platform request builders", () => {
     });
     expect(JSON.stringify(body)).toContain('"mimeType":"image/jpeg","data":"/9j/"');
     expect(JSON.stringify(body)).toContain("Choose using only the visible screen.");
+    expect(JSON.stringify(body)).toContain("1080 x 675 screenshot");
   });
 
   it("builds an OpenAI-compatible multimodal request without a local path", () => {

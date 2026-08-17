@@ -15,12 +15,15 @@ const config = parseHarnessConfig({
   performance: { settleDelayMs: 0 },
 });
 
-function fixture(rawOutputs: string[]) {
+function fixture(rawOutputs: string[], screenshotSequence = [
+  Uint8Array.from([1, 2, 3]),
+  Uint8Array.from([4, 5, 6]),
+  Uint8Array.from([7, 8, 9]),
+]) {
   const browserActions: unknown[] = [];
-  const screenshots = [Uint8Array.from([1, 2, 3]), Uint8Array.from([4, 5, 6]), Uint8Array.from([7, 8, 9])];
   let screenshotCalls = 0;
   const session: BrowserSession = {
-    screenshot: async () => screenshots[Math.min(screenshotCalls++, screenshots.length - 1)],
+    screenshot: async () => screenshotSequence[Math.min(screenshotCalls++, screenshotSequence.length - 1)],
     move: async (x, y) => { browserActions.push(["MOVE", x, y]); },
     click: async (x, y) => { browserActions.push(["CLICK", x, y]); },
     close: async () => { browserActions.push(["CLOSE"]); },
@@ -123,6 +126,16 @@ describe("serialized agent run loop", () => {
     expect(run.requests[1].screenshot).toBe(run.requests[0].screenshot);
     expect(run.requests[1].validationFeedback).toContain("valid JSON");
     expect(run.requests[2].validationFeedback).toBe("coordinates outside viewport");
+  });
+
+  it("reports when a valid click leaves the visible screen unchanged", async () => {
+    const run = fixture([
+      '{"type":"CLICK","x":500,"y":443,"purpose":"navigation"}',
+      '{"type":"DONE"}',
+    ], [Uint8Array.from([1, 2, 3])]);
+
+    await run.loop.run(config, "Choose using only the visible screen.");
+    expect(run.requests[1].validationFeedback).toContain("no visible change");
   });
 
   it("terminates incomplete at the invalid-action limit without executing input", async () => {
