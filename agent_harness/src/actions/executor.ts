@@ -11,7 +11,8 @@ export async function executeComputerAction(
   try {
     if (action.type === "click") await session.click(action.x, action.y);
     else if (action.type === "move") await session.move(action.x, action.y);
-    else await sleep(action.milliseconds);
+    else if (action.type === "wait") await sleep(action.milliseconds);
+    else return { action, status: "rejected", error: "Unsupported computer action type" };
     return { action, status: "executed" };
   } catch (error) {
     return {
