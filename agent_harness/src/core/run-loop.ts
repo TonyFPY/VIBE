@@ -79,6 +79,7 @@ export class RunLoop {
       const navigationStartedAt = this.nowMs();
       session = await this.dependencies.browserHost.openSession(url, config.viewport);
       timing.navigation.observe(this.nowMs() - navigationStartedAt);
+      await this.beginTrial(session, config, summary, timing.actionAndLog);
       let screenshot = await this.captureObservation(session, config, summary, timing.screenshotAndLog);
       let validationFeedback: string | undefined;
       summary = { ...summary, status: "incomplete", failureReason: "step limit reached" };
@@ -157,6 +158,9 @@ export class RunLoop {
         const settleStartedAt = this.nowMs();
         await this.sleep(config.performance.settleDelayMs);
         timing.settle.observe(this.nowMs() - settleStartedAt);
+        if (parsed.action.type === "CLICK") {
+          await this.beginTrial(session, config, summary, timing.actionAndLog);
+        }
         screenshot = await this.captureObservation(session, config, summary, timing.screenshotAndLog);
       }
     } catch (error) {
@@ -200,6 +204,29 @@ export class RunLoop {
     });
     timing.observe(this.nowMs() - startedAt);
     return screenshot;
+  }
+
+  private async beginTrial(
+    session: BrowserSession,
+    config: HarnessConfig,
+    summary: RunSummary,
+    timing: TimingHistogram,
+  ): Promise<void> {
+    const startedAt = this.nowMs();
+    const x = config.viewport.width / 2;
+    const y = config.viewport.height / 2;
+    await session.move(x, y);
+    await session.click(x, y);
+    await this.dependencies.logger.log({
+      type: "fixation",
+      at: this.nowIso(),
+      step: summary.stepCount,
+      x,
+      y,
+      purpose: "fixation",
+      actionValid: true,
+    });
+    timing.observe(this.nowMs() - startedAt);
   }
 
   private async requestWithTimeout(request: ModelRequest, timeoutMs: number): Promise<ModelResponse> {

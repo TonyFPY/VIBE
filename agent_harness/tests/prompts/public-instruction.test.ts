@@ -5,10 +5,10 @@ import { publicInstructionForTask } from "../../src/prompts/public-instruction";
 describe("public task instructions", () => {
   it("returns only participant-visible guidance for supported routes", () => {
     expect(publicInstructionForTask("https://example.test/tasks/visual-similarity?model=secret")).toBe(
-      "Complete the visual similarity experiment using only what is visible. Start or continue when prompted, click the center cross to reveal each trial, then choose the candidate most visually similar to the reference. Return DONE only when the visible page says the experiment is complete.",
+      "Complete the visual similarity experiment using only what is visible. Start or continue when prompted. Choose the candidate most visually similar to the reference after each trial is revealed. Return DONE only when the visible page says the experiment is complete.",
     );
     expect(publicInstructionForTask("https://example.test/tasks/object-matching")).toContain(
-      "choose the candidate object that belongs with the reference",
+      "Choose the candidate object that belongs with the reference",
     );
   });
 

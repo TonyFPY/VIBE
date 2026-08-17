@@ -45,6 +45,13 @@ The harness accepts only participant digits. It constructs
 removes unrelated query parameters. `dev` is the safe smoke-test mode; `ops`
 runs the full website operation.
 
+Before every model observation, the harness moves to and clicks the fixed
+viewport center to begin the next trial. The fixation cross is never sent to
+the model, so it does not spend a vision request on a deterministic action.
+After the final response, the harness preserves the same flow on the terminal
+save page, captures that page, and lets the model return `DONE`; it never
+clicks a save or download control.
+
 The versioned model catalog is in `src/config/model-catalog.ts`. A model must
 be explicitly listed as vision-capable and available in the configured
 location. Each entry keeps a stable harness/logging name separate from the

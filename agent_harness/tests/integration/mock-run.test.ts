@@ -47,7 +47,6 @@ describe("deterministic Playwright run", () => {
       performance: { settleDelayMs: 30 },
     });
     const outputs = [
-      '{"type":"CLICK","x":540,"y":338,"purpose":"fixation"}',
       '{"type":"MOVE","x":756,"y":386}',
       '{"type":"CLICK","x":756,"y":386,"purpose":"response"}',
       '{"type":"DONE"}',

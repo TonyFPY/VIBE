@@ -77,11 +77,37 @@ describe("serialized agent run loop", () => {
       timings: {
         provider: { count: 3 },
         screenshotAndLog: { count: 3 },
-        actionAndLog: { count: 3 },
+        actionAndLog: { count: 5 },
       },
     });
-    expect(run.browserActions).toEqual([["MOVE", 540, 338], ["CLICK", 756, 386], ["CLOSE"]]);
+    expect(run.browserActions).toEqual([
+      ["MOVE", 540, 337.5], ["CLICK", 540, 337.5],
+      ["MOVE", 540, 338], ["CLICK", 756, 386],
+      ["MOVE", 540, 337.5], ["CLICK", 540, 337.5],
+      ["CLOSE"],
+    ]);
     expect(run.writtenScreenshots).toHaveLength(3);
+  });
+
+  it("does not ask the model to observe fixation crosses, including before the save page", async () => {
+    const run = fixture([
+      '{"type":"CLICK","x":756,"y":386,"purpose":"response"}',
+      '{"type":"DONE"}',
+    ]);
+
+    await expect(run.loop.run(config, "Choose using only the visible screen.")).resolves.toMatchObject({
+      status: "completed",
+      stepCount: 2,
+      observationCount: 2,
+      actionCount: 1,
+    });
+    expect(run.browserActions).toEqual([
+      ["MOVE", 540, 337.5], ["CLICK", 540, 337.5],
+      ["CLICK", 756, 386],
+      ["MOVE", 540, 337.5], ["CLICK", 540, 337.5],
+      ["CLOSE"],
+    ]);
+    expect(run.requests).toHaveLength(2);
   });
 
   it("reuses unchanged JPEG bytes after invalid output and reports schema feedback", async () => {
@@ -109,6 +135,9 @@ describe("serialized agent run loop", () => {
       invalidActionCount: 2,
       failureReason: "invalid action limit reached",
     });
-    expect(run.browserActions).toEqual([["CLOSE"]]);
+    expect(run.browserActions).toEqual([
+      ["MOVE", 540, 337.5], ["CLICK", 540, 337.5],
+      ["CLOSE"],
+    ]);
   });
 });

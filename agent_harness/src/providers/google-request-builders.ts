@@ -2,7 +2,7 @@ import type { AgentActionType } from "../actions/contract";
 import type { ModelRequest } from "./model-adapter";
 
 function actionSchema(action: AgentActionType): string {
-  if (action === "CLICK") return '{"type":"CLICK","x":<number>,"y":<number>,"purpose":"navigation|fixation|response"}';
+  if (action === "CLICK") return '{"type":"CLICK","x":<number>,"y":<number>,"purpose":"navigation|response"}';
   if (action === "MOVE") return '{"type":"MOVE","x":<number>,"y":<number>}';
   return '{"type":"DONE"}';
 }
