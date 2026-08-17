@@ -73,10 +73,16 @@ agent_harness/
   README.md
 ```
 
-The normalized action types and parser remain in
-`tasks/shared/agent/actions.ts` so the website boundary and external harness
-share one contract. That contract will be minimally extended with `MOVE` while
-preserving `CLICK` and `DONE`.
+The normalized action types, strict parser, and browser-action policy live
+inside `agent_harness/src/actions/`. The existing website repository code is a
+read-only external interface and is not modified by this implementation. The
+harness supports `MOVE`, `CLICK`, and `DONE` independently while interacting
+with the website only through normal browser pointer events.
+
+All implementation code changes are restricted to `agent_harness/`. Files
+outside that directory may be changed only when they are Markdown
+documentation. Firebase configuration, task renderers, shared website code,
+Functions, persistence, and root build configuration remain unchanged.
 
 ## Architecture
 
@@ -446,9 +452,11 @@ are never logged.
   rejected;
 - a long mock run verifies that screenshot and event objects are released
   rather than retained with step count;
-- Playwright pointer actions reach the existing website and produce its normal
-  result and trajectory records;
-- human-mode website tests continue to pass unchanged.
+- Playwright pointer actions reach a deterministic public-page fixture and, in
+  an opt-in live smoke test, the existing website without importing or changing
+  website code;
+- a scope audit confirms implementation changes are confined to
+  `agent_harness/` plus Markdown documentation.
 
 ### No-cheating tests
 
@@ -474,7 +482,8 @@ confirmation.
 ## Delivery Sequence
 
 1. Scaffold the isolated `agent_harness` TypeScript package and tests.
-2. Extend the shared action contract with `MOVE` and boundary tests.
+2. Implement a harness-local `MOVE`/`CLICK`/`DONE` action contract and boundary
+   tests.
 3. Implement configuration, model catalog, strict policy, and private logging.
 4. Implement the Playwright controller against a deterministic mock adapter.
 5. Add no-cheating request serialization tests.
@@ -502,3 +511,5 @@ confirmation.
   model calls.
 - Adding a future direct OpenAI adapter requires no changes to the controller,
   run loop, action parser, or website.
+- No website source, Firebase configuration, Functions code, root build code,
+  or non-Markdown file outside `agent_harness/` is modified.
