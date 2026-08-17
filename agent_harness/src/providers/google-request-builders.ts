@@ -12,7 +12,7 @@ export function buildPublicPrompt(request: ModelRequest): string {
   const feedback = request.validationFeedback ? `\nPrevious output validation error: ${request.validationFeedback}` : "";
   return [
     request.publicInstruction,
-    "Use only the visible screenshot. Return exactly one JSON object and no other text.",
+    "Use only the visible screenshot. Reason privately, then emit exactly one complete JSON action object and no other text, prefix, markdown, or partial JSON.",
     "Coordinates are screenshot pixels in the original 1080 x 675 screenshot: origin (0,0) is top-left, x increases right, and y increases down. If an action causes no visible change, choose a different coordinate.",
     "Allowed action shapes:",
     schemas,

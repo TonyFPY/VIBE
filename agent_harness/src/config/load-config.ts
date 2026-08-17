@@ -2,8 +2,9 @@ import { resolveModelSpec } from "./model-catalog";
 import type { HarnessConfig, HarnessConfigInput, PerformanceConfig, Viewport } from "./types";
 
 const DEFAULT_VIEWPORT: Viewport = { width: 1080, height: 675 };
+const DEFAULT_OUTPUT_TOKENS = 2048;
 const DEFAULT_PERFORMANCE: PerformanceConfig = {
-  outputTokens: 512,
+  outputTokens: DEFAULT_OUTPUT_TOKENS,
   connectTimeoutMs: 10_000,
   requestTimeoutMs: 60_000,
   totalRunTimeoutMs: 1_800_000,
@@ -80,7 +81,7 @@ export function parseHarnessConfig(input: unknown): HarnessConfig {
     maxSteps: boundedInteger(input.maxSteps, 100, "maxSteps", 1, 10_000),
     maxInvalidActions: boundedInteger(input.maxInvalidActions, 3, "maxInvalidActions", 0, 100),
     performance: {
-      outputTokens: boundedInteger(performanceRecord.outputTokens, 512, "outputTokens", 16, 1024),
+      outputTokens: boundedInteger(performanceRecord.outputTokens, DEFAULT_OUTPUT_TOKENS, "outputTokens", 16, 4096),
       connectTimeoutMs: boundedInteger(performanceRecord.connectTimeoutMs, 10_000, "connectTimeoutMs", 100, 120_000),
       requestTimeoutMs: boundedInteger(performanceRecord.requestTimeoutMs, 60_000, "requestTimeoutMs", 1000, 600_000),
       totalRunTimeoutMs: boundedInteger(performanceRecord.totalRunTimeoutMs, 1_800_000, "totalRunTimeoutMs", 1000, 86_400_000),
