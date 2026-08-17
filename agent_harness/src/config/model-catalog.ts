@@ -1,7 +1,10 @@
 export type GoogleApiFamily = "google" | "openai-compatible" | "raw-predict";
 
 export interface ModelSpec {
+  /** Stable harness configuration and logging identifier. */
   modelId: string;
+  /** Exact identifier sent to the Google Agent Platform API. */
+  apiModelId: string;
   publisher: string;
   apiFamily: GoogleApiFamily;
   supportsVision: boolean;
@@ -12,6 +15,7 @@ export interface ModelSpec {
 export const MODEL_CATALOG: readonly ModelSpec[] = [
   {
     modelId: "google/gemini-3.5-flash",
+    apiModelId: "gemini-3.5-flash",
     publisher: "google",
     apiFamily: "google",
     supportsVision: true,
@@ -20,6 +24,7 @@ export const MODEL_CATALOG: readonly ModelSpec[] = [
   },
   {
     modelId: "meta/llama-4-maverick-17b-128e-instruct-maas",
+    apiModelId: "llama-4-maverick-17b-128e-instruct-maas",
     publisher: "meta",
     apiFamily: "openai-compatible",
     supportsVision: true,
@@ -28,6 +33,7 @@ export const MODEL_CATALOG: readonly ModelSpec[] = [
   },
   {
     modelId: "anthropic/claude-sonnet-4-6",
+    apiModelId: "claude-sonnet-4-6",
     publisher: "anthropic",
     apiFamily: "raw-predict",
     supportsVision: true,
@@ -36,6 +42,7 @@ export const MODEL_CATALOG: readonly ModelSpec[] = [
   },
   {
     modelId: "xai/grok-4-3",
+    apiModelId: "grok-4-3",
     publisher: "xai",
     apiFamily: "raw-predict",
     supportsVision: false,

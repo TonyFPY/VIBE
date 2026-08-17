@@ -24,10 +24,10 @@ const performance = {
 
 describe("GoogleAgentPlatformAdapter", () => {
   it("selects the catalog protocol and normalizes its raw action text", async () => {
-    const calls: string[] = [];
+    const calls: Array<{ family: string; apiModel: unknown }> = [];
     const transport: GoogleTransport = {
-      async invoke(spec) {
-        calls.push(spec.apiFamily);
+      async invoke(spec, body) {
+        calls.push({ family: spec.apiFamily, apiModel: (body as { model?: unknown }).model });
         return {
           choices: [{ message: { content: '{"type":"DONE"}' } }],
           usage: { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 },
@@ -50,7 +50,10 @@ describe("GoogleAgentPlatformAdapter", () => {
       startedAt: "2026-08-16T20:00:00.000Z",
       completedAt: "2026-08-16T20:00:00.000Z",
     });
-    expect(calls).toEqual(["openai-compatible"]);
+    expect(calls).toEqual([{
+      family: "openai-compatible",
+      apiModel: "llama-4-maverick-17b-128e-instruct-maas",
+    }]);
   });
 
   it("retries transient provider failures but not permanent failures", async () => {

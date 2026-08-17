@@ -28,10 +28,6 @@ function serviceEndpoint(location: string): string {
   return `${location}-aiplatform.googleapis.com`;
 }
 
-function bareModelId(spec: ModelSpec): string {
-  return spec.modelId.includes("/") ? spec.modelId.slice(spec.modelId.indexOf("/") + 1) : spec.modelId;
-}
-
 export class DefaultGoogleTransport implements GoogleTransport {
   private readonly genai: GoogleGenAI;
   private readonly auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
@@ -61,7 +57,7 @@ export class DefaultGoogleTransport implements GoogleTransport {
     const encodedLocation = encodeURIComponent(this.location);
     const url = spec.apiFamily === "openai-compatible"
       ? `https://${endpoint}/v1/projects/${encodedProject}/locations/${encodedLocation}/endpoints/openapi/chat/completions`
-      : `https://${endpoint}/v1/projects/${encodedProject}/locations/${encodedLocation}/publishers/${encodeURIComponent(spec.publisher)}/models/${encodeURIComponent(bareModelId(spec))}:rawPredict`;
+      : `https://${endpoint}/v1/projects/${encodedProject}/locations/${encodedLocation}/publishers/${encodeURIComponent(spec.publisher)}/models/${encodeURIComponent(spec.apiModelId)}:rawPredict`;
     const response = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -132,10 +128,10 @@ export class GoogleAgentPlatformAdapter implements ModelAdapter {
   private buildRequest(request: ModelRequest): unknown {
     const tokens = this.options.performance.outputTokens;
     if (this.options.model.apiFamily === "google") {
-      return buildGoogleRequest(request, bareModelId(this.options.model), tokens);
+      return buildGoogleRequest(request, this.options.model.apiModelId, tokens);
     }
     if (this.options.model.apiFamily === "openai-compatible") {
-      return buildOpenAiCompatibleRequest(request, this.options.model.modelId, tokens);
+      return buildOpenAiCompatibleRequest(request, this.options.model.apiModelId, tokens);
     }
     return buildRawPredictRequest(request, tokens);
   }

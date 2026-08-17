@@ -47,8 +47,9 @@ runs the full website operation.
 
 The versioned model catalog is in `src/config/model-catalog.ts`. A model must
 be explicitly listed as vision-capable and available in the configured
-location. Google, OpenAI-compatible MaaS, and Anthropic `rawPredict` protocols
-are internal request strategies behind the same adapter.
+location. Each entry keeps a stable harness/logging name separate from the
+exact model ID sent to Google. Google, OpenAI-compatible MaaS, and Anthropic
+`rawPredict` protocols are internal request strategies behind the same adapter.
 
 ## Run
 
