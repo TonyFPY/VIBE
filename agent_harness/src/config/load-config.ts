@@ -3,7 +3,7 @@ import type { HarnessConfig, HarnessConfigInput, PerformanceConfig, Viewport } f
 
 const DEFAULT_VIEWPORT: Viewport = { width: 1080, height: 675 };
 const DEFAULT_PERFORMANCE: PerformanceConfig = {
-  outputTokens: 128,
+  outputTokens: 512,
   connectTimeoutMs: 10_000,
   requestTimeoutMs: 60_000,
   totalRunTimeoutMs: 1_800_000,
@@ -80,7 +80,7 @@ export function parseHarnessConfig(input: unknown): HarnessConfig {
     maxSteps: boundedInteger(input.maxSteps, 100, "maxSteps", 1, 10_000),
     maxInvalidActions: boundedInteger(input.maxInvalidActions, 3, "maxInvalidActions", 0, 100),
     performance: {
-      outputTokens: boundedInteger(performanceRecord.outputTokens, 128, "outputTokens", 16, 1024),
+      outputTokens: boundedInteger(performanceRecord.outputTokens, 512, "outputTokens", 16, 1024),
       connectTimeoutMs: boundedInteger(performanceRecord.connectTimeoutMs, 10_000, "connectTimeoutMs", 100, 120_000),
       requestTimeoutMs: boundedInteger(performanceRecord.requestTimeoutMs, 60_000, "requestTimeoutMs", 1000, 600_000),
       totalRunTimeoutMs: boundedInteger(performanceRecord.totalRunTimeoutMs, 1_800_000, "totalRunTimeoutMs", 1000, 86_400_000),

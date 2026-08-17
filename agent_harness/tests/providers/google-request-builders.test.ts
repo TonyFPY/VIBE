@@ -23,7 +23,7 @@ describe("Google Agent Platform request builders", () => {
         maxOutputTokens: 128,
         temperature: 0,
         responseMimeType: "application/json",
-        thinkingConfig: { thinkingLevel: "minimal" },
+        thinkingConfig: { thinkingLevel: "medium", includeThoughts: false },
         responseJsonSchema: expect.objectContaining({
           type: "object",
           additionalProperties: false,

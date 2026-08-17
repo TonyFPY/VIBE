@@ -24,7 +24,7 @@ describe("harness configuration", () => {
       maxSteps: 100,
       maxInvalidActions: 3,
       performance: {
-        outputTokens: 128,
+        outputTokens: 512,
         connectTimeoutMs: 10_000,
         requestTimeoutMs: 60_000,
         totalRunTimeoutMs: 1_800_000,

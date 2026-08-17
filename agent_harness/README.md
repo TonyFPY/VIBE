@@ -57,6 +57,9 @@ be explicitly listed as vision-capable and available in the configured
 location. Each entry keeps a stable harness/logging name separate from the
 exact model ID sent to Google. Google, OpenAI-compatible MaaS, and Anthropic
 `rawPredict` protocols are internal request strategies behind the same adapter.
+For Gemini 3 models, the request allows medium internal reasoning while
+excluding thoughts from the returned content; only the validated JSON action
+reaches the browser controller.
 
 ## Run
 

@@ -37,9 +37,9 @@ function actionResponseJsonSchema(): Record<string, unknown> {
   };
 }
 
-function thinkingConfigFor(model: string): Record<string, string | number> {
+function thinkingConfigFor(model: string): Record<string, string | number | boolean> {
   return model.startsWith("gemini-3")
-    ? { thinkingLevel: "minimal" }
+    ? { thinkingLevel: "medium", includeThoughts: false }
     : { thinkingBudget: 0 };
 }
 
