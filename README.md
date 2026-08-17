@@ -41,6 +41,11 @@ Agent runs use the same URLs, with `participant_id`, `model`, and `run`. A real 
 receive screenshots only; do not give it DOM, accessibility, task-data, or
 source-code access.
 
+The independent [agent harness](agent_harness/README.md) runs the deployed task
+with Playwright and Google Agent Platform models. Its code and dependencies are
+contained in `agent_harness/`; the website remains unchanged and continues to
+save its own results and trajectories.
+
 | Task | Development URL | Operation URL |
 | --- | --- | --- |
 | Visual similarity | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5.6-luna&run=dev` | `http://127.0.0.1:5173/tasks/visual-similarity?participant_id=A001&model=gpt-5.6-luna&run=ops` |
@@ -62,8 +67,8 @@ The website records testing cursor trajectories and saves them through the same
 session payload for humans and agents. See [website cursor trajectories](docs/agent_cursor_tracing.md).
 
 At completion, `run=dev` sessions automatically submit to the same-origin
-`/api/experiments/sessions` endpoint. `run=ops` sessions use `VITE_RESULTS_ENDPOINT` when
-`run=ops` sessions use `VITE_RESULTS_ENDPOINT` when configured; otherwise the completion screen keeps browser recovery data and
+`/api/experiments/sessions` endpoint. `run=ops` sessions use
+`VITE_RESULTS_ENDPOINT` when configured; otherwise the completion screen keeps browser recovery data and
 offers separate downloads for results and trajectories.
 
 ### Codex chat development prompts

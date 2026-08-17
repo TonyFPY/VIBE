@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Public task fixture</title>
+    <style>
+      html, body { width: 100%; height: 100%; margin: 0; }
+      button { position: absolute; width: 120px; height: 80px; }
+      #cross { left: 480px; top: 298px; }
+      #candidate { display: none; left: 696px; top: 346px; }
+    </style>
+  </head>
+  <body>
+    <button id="cross" type="button">+</button>
+    <button id="candidate" type="button">Candidate</button>
+    <script>
+      const report = (type) => fetch(`/event?type=${encodeURIComponent(type)}`).catch(() => undefined);
+      document.body.addEventListener("pointermove", () => report("move"), { once: true });
+      document.getElementById("cross").addEventListener("click", () => {
+        report("fixation");
+        document.getElementById("cross").style.display = "none";
+        document.getElementById("candidate").style.display = "block";
+      });
+      document.getElementById("candidate").addEventListener("click", () => {
+        report("response");
+        document.body.textContent = "Experiment complete";
+      });
+    </script>
+  </body>
+</html>
