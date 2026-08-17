@@ -24,6 +24,7 @@
       });
       document.getElementById("candidate").addEventListener("click", () => {
         report("response");
+        fetch("/api/experiments/sessions", { method: "POST" }).catch(() => undefined);
         document.body.textContent = "Results saved successfully.";
       });
     </script>

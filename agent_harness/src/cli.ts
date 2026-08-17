@@ -6,15 +6,21 @@ import { pathToFileURL } from "node:url";
 import { PlaywrightBrowserHost } from "./browser/playwright-controller";
 import { parseHarnessConfig } from "./config/load-config";
 import { resolveModelSpec } from "./config/model-catalog";
+import type { HarnessConfig } from "./config/types";
 import { RunLoop } from "./core/run-loop";
 import { RunLogger } from "./logging/run-logger";
 import { publicInstructionForTask } from "./prompts/public-instruction";
-import { GoogleAgentPlatformAdapter } from "./providers/google-agent-platform";
+import { GeminiComputerUseAgent, type GeminiComputerUseAgentOptions } from "./providers/gemini-computer-use";
+import type { ComputerUseAgent } from "./providers/computer-use-agent";
 
 export interface CliArgs {
   configPath: string;
   headed: boolean;
 }
+
+export type GeminiComputerUseAgentFactory = (
+  options: GeminiComputerUseAgentOptions,
+) => ComputerUseAgent;
 
 export function parseCliArgs(args: readonly string[]): CliArgs {
   let configPath: string | undefined;
@@ -43,6 +49,17 @@ function secretEnvironmentValues(environment: NodeJS.ProcessEnv): string[] {
     .map(([, value]) => value!);
 }
 
+export function createGeminiComputerUseAgent(
+  config: HarnessConfig,
+  environment: NodeJS.ProcessEnv,
+  createAgent: GeminiComputerUseAgentFactory = (options) => new GeminiComputerUseAgent(options),
+): ComputerUseAgent {
+  const apiKey = environment.GEMINI_API_KEY?.trim();
+  if (!apiKey) throw new Error("GEMINI_API_KEY is required");
+  const model = resolveModelSpec(config.model);
+  return createAgent({ apiKey, model: model.apiModelId, performance: config.performance });
+}
+
 export async function runCli(
   args: readonly string[] = process.argv.slice(2),
   environment: NodeJS.ProcessEnv = process.env,
@@ -50,8 +67,7 @@ export async function runCli(
   const { configPath, headed } = parseCliArgs(args);
   const rawConfig = JSON.parse(await readFile(resolve(configPath), "utf8"));
   const config = parseHarnessConfig(rawConfig);
-  const project = environment.GOOGLE_CLOUD_PROJECT?.trim();
-  if (!project) throw new Error("GOOGLE_CLOUD_PROJECT is required");
+  const agent = createGeminiComputerUseAgent(config, environment);
   const runId = `agent-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runsRoot = resolve(environment.AGENT_RUNS_DIR?.trim() || "runs");
   const logger = await RunLogger.open({
@@ -64,21 +80,21 @@ export async function runCli(
     settleDelayMs: config.performance.settleDelayMs,
     navigationTimeoutMs: config.performance.connectTimeoutMs,
   });
-  const model = new GoogleAgentPlatformAdapter({
-    project,
-    location: config.location,
-    model: resolveModelSpec(config.model, config.location),
-    performance: config.performance,
-  });
   try {
-    const summary = await new RunLoop({ browserHost, model, logger }).run(
+    const summary = await new RunLoop({ browserHost, agent, logger }).run(
       config,
       publicInstructionForTask(config.taskUrl),
     );
     process.stdout.write(`${JSON.stringify({ runId, ...summary })}\n`);
-    return summary.status === "completed" ? 0 : summary.status === "incomplete" ? 2 : 1;
+    if (summary.status === "completed") return 0;
+    if (summary.status === "failed") return 1;
+    return 2;
   } finally {
-    await browserHost.close();
+    try {
+      await agent.close();
+    } finally {
+      await browserHost.close();
+    }
   }
 }
 

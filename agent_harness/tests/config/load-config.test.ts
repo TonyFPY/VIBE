@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildTaskUrl, parseHarnessConfig } from "../../src/config/load-config";
+import { resolveModelSpec } from "../../src/config/model-catalog";
 
 const minimumConfig = {
   taskUrl: "https://vibe-9d6e5.web.app/tasks/visual-similarity",
@@ -34,6 +35,15 @@ describe("harness configuration", () => {
     });
   });
 
+  it("accepts the catalogued Gemini computer-use model", () => {
+    expect(resolveModelSpec(minimumConfig.model)).toEqual({
+      modelId: "google/gemini-3.7-flash",
+      apiModelId: "gemini-3.7-flash",
+      provider: "gemini",
+      supportsComputerUse: true,
+    });
+  });
+
   it("rejects unsafe identity, run, URL, and JPEG settings", () => {
     expect(() => parseHarnessConfig({ ...minimumConfig, participantId: "A001" })).toThrow("participantId");
     expect(() => parseHarnessConfig({ ...minimumConfig, runMode: "full" })).toThrow("runMode");
@@ -42,8 +52,8 @@ describe("harness configuration", () => {
     expect(() => parseHarnessConfig({ ...minimumConfig, screenshotQuality: 101 })).toThrow("screenshotQuality");
   });
 
-  it("rejects unknown models and ignores obsolete Vertex locations", () => {
-    expect(() => parseHarnessConfig({ ...minimumConfig, model: "unknown/model" })).toThrow("model");
+  it("rejects non-Gemini model IDs and ignores obsolete Vertex locations", () => {
+    expect(() => parseHarnessConfig({ ...minimumConfig, model: "openai/gpt-5" })).toThrow("model");
     expect(parseHarnessConfig({ ...minimumConfig, location: "global" })).not.toHaveProperty("location");
   });
 });
