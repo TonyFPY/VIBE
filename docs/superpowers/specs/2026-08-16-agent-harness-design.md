@@ -221,6 +221,11 @@ Each model request is stateless in the first version: it contains the current
 screenshot and the same public task instruction, with no hidden state or
 cross-run memory.
 
+Chromium uses `deviceScaleFactor: 1` so screenshot pixels match the CSS-pixel
+coordinates returned by the model. The harness must not crop or downscale the
+viewport because either change could remove participant-visible information or
+alter coordinate accuracy.
+
 ## Observation and Prompt Boundary
 
 Each observation contains exactly:
@@ -296,6 +301,85 @@ For every run:
 The website independently saves behavioral results and trajectories through
 its existing API. The harness does not retry, rewrite, or upload those records.
 
+## Performance and Resource Design
+
+The design minimizes harness overhead without changing the experiment pixels,
+timing rules, or information boundary.
+
+### Browser lifecycle
+
+- Launch one headless Chromium process for a sequential batch of runs.
+- Create a new isolated browser context for every run and close it immediately
+  at the terminal state. This preserves fresh cookies, cache, storage, and
+  session state while avoiding repeated Chromium startup cost.
+- Keep batch concurrency at one by default. A configurable concurrency limit
+  may be added for throughput testing, but it must be bounded by memory and
+  model quota rather than allowed to grow with the queue.
+- Keep the native `1080 × 675`, scale-factor-one viewport. Do not block task
+  images, fonts, or other resources needed for equivalent rendering.
+
+### Observation lifecycle
+
+- Capture JPEG directly from Playwright at quality 90; do not create a PNG or
+  an intermediate image conversion.
+- Retain at most the current screenshot and its in-flight provider encoding.
+  Release binary and base64 representations as soon as the request and private
+  log write complete.
+- Write screenshots directly to disk with backpressure instead of collecting
+  them in a run-level array.
+- If an action is invalid and the browser has not changed, reuse the current
+  JPEG for the retry. Append only a schema-validation reminder to the public
+  prompt; do not recapture identical pixels or expose private state.
+
+### Model request lifecycle
+
+- Create the Google authentication and HTTP clients once per harness process.
+  Reuse authorized sessions and HTTP keep-alive connections across calls.
+- Resolve and validate the model catalog entry once at run start.
+- Request exactly one action per call and cap output at 128 tokens by default.
+- Prefer provider-supported structured JSON output. For models without it, use
+  the same short JSON-only instruction and strict parser.
+- Use non-streaming responses because the complete, short action is required
+  before validation; token streaming adds coordination overhead without
+  enabling earlier execution.
+- Keep requests stateless. Do not resend prior screenshots or raw model output.
+- Reuse or cache only the static public instruction when a provider supports
+  native prompt caching. Never cache screenshots or private controller data.
+- Apply 10-second connection, 60-second model-request, and 30-minute total-run
+  timeouts by default. Retry only recognized transient failures, with at most
+  two retries by default. All limits are validated configuration overrides.
+
+### Action pacing
+
+- Use a short configurable post-action settle delay with a 100 ms default.
+  The website already preloads task stimuli, so a long fixed wait would add
+  delay to every step.
+- Do not use DOM selectors, JavaScript evaluation, or hidden page state to skip
+  the settle interval or detect readiness.
+- Maintain only one in-flight screenshot, model request, and action per run.
+  Backpressure prevents a slow provider from creating a memory queue.
+
+### Logging and measurement
+
+- Stream events to JSON Lines as they occur; do not retain the full log in
+  memory.
+- Cap the accepted raw model response at 32 KiB by default and record an
+  oversize response as invalid. The action parser validates only the bounded
+  original response and never a repaired or summarized version.
+- Record separate durations for navigation, screenshot capture, request
+  serialization, provider wait, parsing, action execution, settling, and log
+  writes.
+- Summarize count, median, and p95 durations after a batch. Provider wait is
+  reported separately from harness overhead so optimization targets the actual
+  bottleneck.
+- Post-run JSON Lines compression is disabled by default. When explicitly
+  enabled, compress only after the browser context closes, never in the action
+  loop where it would add CPU delay.
+
+These rules require harness-owned memory to remain bounded with step count.
+Long runs may create more files on disk, but they must not retain more
+screenshots, response bodies, or log events in process memory.
+
 ## Logging
 
 Harness logs are distinct from behavioral result files. Each run writes a
@@ -326,8 +410,8 @@ are never logged.
 ## Error Handling
 
 - **Invalid model output:** log the raw output and validation error, do not
-  execute or silently repair it, then request another action from a new
-  screenshot until `maxInvalidActions` is reached.
+  execute or silently repair it, then reuse the unchanged observation with a
+  schema-only validation reminder until `maxInvalidActions` is reached.
 - **Out-of-bounds coordinates:** treat as an invalid action; do not clamp them.
 - **Provider throttling or transient failure:** retry with bounded exponential
   backoff and jitter; record every attempt. Do not switch models automatically.
@@ -351,6 +435,8 @@ are never logged.
 - bounds, purpose, step-limit, and invalid-action policies;
 - provider response normalization and retry classification;
 - JSON Lines logging with credential redaction.
+- bounded screenshot buffers, streamed logging, and response-size limits;
+- fixed device scale, JPEG reuse after invalid actions, and timing summaries.
 
 ### Deterministic integration tests
 
@@ -358,6 +444,8 @@ are never logged.
   and pointer actions;
 - a mock model produces malformed and out-of-bounds actions that are logged and
   rejected;
+- a long mock run verifies that screenshot and event objects are released
+  rather than retained with step count;
 - Playwright pointer actions reach the existing website and produce its normal
   result and trajectory records;
 - human-mode website tests continue to pass unchanged.
@@ -406,6 +494,10 @@ confirmation.
 - Existing website persistence saves agent behavioral results and trajectories.
 - Harness logs include the model, timings, raw output, parsed action, validity,
   screenshot IDs, and terminal status.
+- Per-step work is serialized with bounded memory, direct JPEG capture, reused
+  clients, and no redundant screenshot after an invalid action.
+- Performance summaries separate provider latency from browser and harness
+  overhead.
 - Unit, deterministic integration, and no-cheating tests pass without paid
   model calls.
 - Adding a future direct OpenAI adapter requires no changes to the controller,
