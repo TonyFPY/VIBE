@@ -23,6 +23,26 @@ function base64Screenshot(request: ModelRequest): string {
   return Buffer.from(request.screenshot).toString("base64");
 }
 
+function actionResponseJsonSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      type: { type: "string", enum: ["CLICK", "MOVE", "DONE"] },
+      x: { type: "number" },
+      y: { type: "number" },
+      purpose: { type: "string", enum: ["navigation", "response"] },
+    },
+    required: ["type"],
+    additionalProperties: false,
+  };
+}
+
+function thinkingConfigFor(model: string): Record<string, string | number> {
+  return model.startsWith("gemini-3")
+    ? { thinkingLevel: "minimal" }
+    : { thinkingBudget: 0 };
+}
+
 export function buildGoogleRequest(request: ModelRequest, model: string, maxOutputTokens: number) {
   return {
     model,
@@ -37,6 +57,8 @@ export function buildGoogleRequest(request: ModelRequest, model: string, maxOutp
       maxOutputTokens,
       temperature: 0,
       responseMimeType: "application/json",
+      responseJsonSchema: actionResponseJsonSchema(),
+      thinkingConfig: thinkingConfigFor(model),
     },
   };
 }

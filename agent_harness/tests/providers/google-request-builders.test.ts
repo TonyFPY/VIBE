@@ -19,7 +19,16 @@ describe("Google Agent Platform request builders", () => {
     const body = buildGoogleRequest(request, "gemini-3.5-flash", 128);
     expect(body).toMatchObject({
       model: "gemini-3.5-flash",
-      config: { maxOutputTokens: 128, temperature: 0, responseMimeType: "application/json" },
+      config: {
+        maxOutputTokens: 128,
+        temperature: 0,
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingLevel: "minimal" },
+        responseJsonSchema: expect.objectContaining({
+          type: "object",
+          additionalProperties: false,
+        }),
+      },
     });
     expect(JSON.stringify(body)).toContain('"mimeType":"image/jpeg","data":"/9j/"');
     expect(JSON.stringify(body)).toContain("Choose using only the visible screen.");
