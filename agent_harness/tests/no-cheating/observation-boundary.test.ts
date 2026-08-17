@@ -28,15 +28,53 @@ const performance = {
   maxProviderRetries: 0,
 };
 
+interface PageLikeCanaryFixture {
+  body: { text: string };
+  evaluate(): string;
+  url(): string;
+}
+
+interface PrivateBoundaryFixture {
+  privateTrial: { correctAnswer: string; sourcePath: string };
+  internalTaskRecord: { answerKey: string; domText: string };
+  pageLikeObject: PageLikeCanaryFixture;
+  backend: {
+    url: string;
+    requestBody: { privateAnswer: string };
+    responseBody: { privateAnswer: string };
+  };
+  providerBodies: {
+    requestBody: { privateAnswer: string };
+    responseBody: { privateAnswer: string };
+  };
+}
+
+function pageLikeCanaryFixture(): PageLikeCanaryFixture {
+  const pageLikeObject = { body: { text: canary } } as PageLikeCanaryFixture;
+  Object.defineProperties(pageLikeObject, {
+    evaluate: { value: () => `document.body ${canary}`, enumerable: false },
+    url: {
+      value: () => `https://example.test/tasks/visual-similarity?answer=${canary}`,
+      enumerable: false,
+    },
+  });
+  return pageLikeObject;
+}
+
 const privateFixture = {
   privateTrial: { correctAnswer: canary, sourcePath: `/private/${canary}.jpg` },
   internalTaskRecord: { answerKey: canary, domText: `<button>${canary}</button>` },
-  pageLikeObject: {
-    url: () => `https://example.test/tasks/visual-similarity?answer=${canary}`,
-    evaluate: () => canary,
-    body: { text: canary },
+  pageLikeObject: pageLikeCanaryFixture(),
+  backend: {
+    url: `https://example.test/api/experiments/sessions?answer=${canary}`,
+    requestBody: { privateAnswer: canary },
+    responseBody: { privateAnswer: canary },
   },
-};
+  providerBodies: {
+    requestBody: { privateAnswer: canary },
+    responseBody: { privateAnswer: canary },
+  },
+} satisfies PrivateBoundaryFixture;
 
 function interaction(steps: unknown[], id: string, fields: Record<string, unknown> = {}): unknown {
   return {
@@ -65,18 +103,63 @@ function assertBoundaryValue(label: string, value: unknown): void {
   expect(serialized, label).not.toMatch(/\b(page|evaluate|DOM|html|body|url)\b/i);
 }
 
+function assertNoStructuralBoundaryLeak(label: string, value: unknown): void {
+  const violations: string[] = [];
+  const seen = new WeakSet<object>();
+  const prohibitedKey = /^(page|evaluate|dom|html|url|body|requestBody|responseBody|correctAnswer|answerKey|sourcePath)$/i;
+  const visit = (entry: unknown, path: string): void => {
+    if (typeof entry === "string") {
+      if (entry.includes(canary) || entry.includes("document.body")) violations.push(`${path} string`);
+      return;
+    }
+    if (typeof entry === "function") {
+      violations.push(`${path} function`);
+      return;
+    }
+    if (typeof entry !== "object" || entry === null) return;
+    if (seen.has(entry)) return;
+    seen.add(entry);
+    for (const key of Reflect.ownKeys(entry)) {
+      const keyText = String(key);
+      const childPath = `${path}.${keyText}`;
+      if (prohibitedKey.test(keyText)) violations.push(`${childPath} key`);
+      const descriptor = Object.getOwnPropertyDescriptor(entry, key);
+      if (!descriptor) continue;
+      if ("value" in descriptor) visit(descriptor.value, childPath);
+      else {
+        if (descriptor.get) violations.push(`${childPath} getter`);
+        if (descriptor.set) violations.push(`${childPath} setter`);
+      }
+    }
+  };
+  visit(value, label);
+  expect(violations, label).toEqual([]);
+}
+
+function assertObservationShape(observation: AgentObservation): void {
+  expect(Object.keys(observation).sort()).toEqual(["mimeType", "publicInstruction", "screenshot"]);
+  expect(observation.screenshot).toBeInstanceOf(Uint8Array);
+  expect(observation.mimeType).toBe("image/jpeg");
+  expect(observation.publicInstruction).toBe(publicInstruction);
+}
+
 class FakeGeminiTransport implements GeminiTransport {
   readonly requests: GeminiTransportRequest[] = [];
-  private readonly responses = [
-    interaction([
-      functionCall("click", { x: 250, y: 250, intent: "choose visible candidate" }, "call-1"),
-    ], "interaction-1"),
-    interaction([
-      functionCall("click", { x: 750, y: 500, intent: "submit visible choice" }, "call-2"),
-    ], "interaction-2"),
-  ];
+  private readonly responses: unknown[];
+
+  constructor(providerBodies: PrivateBoundaryFixture["providerBodies"]) {
+    this.responses = [
+      interaction([
+        functionCall("click", { x: 250, y: 250, intent: "choose visible candidate" }, "call-1"),
+      ], "interaction-1", providerBodies),
+      interaction([
+        functionCall("click", { x: 750, y: 500, intent: "submit visible choice" }, "call-2"),
+      ], "interaction-2", providerBodies),
+    ];
+  }
 
   async invoke(request: GeminiTransportRequest): Promise<unknown> {
+    assertNoStructuralBoundaryLeak("transport received request", request);
     this.requests.push(request);
     const response = this.responses.shift();
     if (!response) throw new Error("Unexpected Gemini request");
@@ -96,6 +179,8 @@ class RecordingAgent implements ComputerUseAgent {
   }
 
   async next(observation: AgentObservation, signal: AbortSignal): Promise<AgentTurn> {
+    assertObservationShape(observation);
+    assertNoStructuralBoundaryLeak("agent received observation", observation);
     this.observations.push(observation);
     return this.delegate.next(observation, signal);
   }
@@ -105,6 +190,9 @@ class RecordingAgent implements ComputerUseAgent {
     result: ActionResult,
     signal: AbortSignal,
   ): Promise<AgentTurn> {
+    assertObservationShape(observation);
+    assertNoStructuralBoundaryLeak("agent received continuation observation", observation);
+    assertNoStructuralBoundaryLeak("agent received action result", result);
     this.observations.push(observation);
     this.actionResults.push(result);
     return this.delegate.reportActionResult(observation, result, signal);
@@ -124,9 +212,9 @@ describe("screenshot-only observation boundary", () => {
   });
 
   it("keeps private task data, page state, URLs, and bodies out of Gemini requests and persisted logs", async () => {
-    void privateFixture;
     logRoot = await mkdtemp(join(tmpdir(), "agent-harness-boundary-"));
-    const transport = new FakeGeminiTransport();
+    const evaluatorOnlyValues: unknown[] = [];
+    const transport = new FakeGeminiTransport(privateFixture.providerBodies);
     const agent = new RecordingAgent(new GeminiComputerUseAgent({
       apiKey: "test-key",
       model: "google/gemini-3.7-flash",
@@ -151,11 +239,32 @@ describe("screenshot-only observation boundary", () => {
       click: async () => {
         clickCount += 1;
         if (clickCount === 2) {
-          const event = { type: "results-response", status: 202, ok: false, body: canary } as const;
+          const rawBackendResponse = {
+            page: privateFixture.pageLikeObject,
+            url: privateFixture.backend.url,
+            requestBody: privateFixture.backend.requestBody,
+            responseBody: privateFixture.backend.responseBody,
+            status: 202,
+            ok: false,
+          };
+          evaluatorOnlyValues.push(rawBackendResponse);
+          const event = {
+            type: "results-response",
+            status: rawBackendResponse.status,
+            ok: rawBackendResponse.ok,
+          } as const;
           deliveredBackendEvents.push({ type: event.type, status: event.status, ok: event.ok });
           backendListener?.(event);
         }
         if (clickCount === 4) {
+          const rawBackendFailure = {
+            page: privateFixture.pageLikeObject,
+            url: privateFixture.backend.url,
+            requestBody: privateFixture.backend.requestBody,
+            responseBody: privateFixture.backend.responseBody,
+            error: `backend request failed ${canary}`,
+          };
+          evaluatorOnlyValues.push(rawBackendFailure);
           const event = { type: "results-request-failed", error: "backend request failed" } as const;
           deliveredBackendEvents.push({ type: event.type, error: event.error });
           backendListener?.(event);
@@ -170,6 +279,14 @@ describe("screenshot-only observation boundary", () => {
     const browserHost: BrowserHost = {
       openSession: async (url) => {
         openedUrl = url;
+        evaluatorOnlyValues.push(
+          privateFixture.privateTrial,
+          privateFixture.internalTaskRecord,
+          privateFixture.pageLikeObject,
+          privateFixture.pageLikeObject.url(),
+          privateFixture.pageLikeObject.evaluate(),
+          privateFixture.pageLikeObject.body,
+        );
         return session;
       },
       close: async () => undefined,
@@ -198,6 +315,7 @@ describe("screenshot-only observation boundary", () => {
     const persistedLog = await readFile(join(logRoot, "boundary-run", "events.jsonl"), "utf8");
     const providerRequests = transport.requests.map((request) => JSON.parse(JSON.stringify(request)));
 
+    expect(JSON.stringify(evaluatorOnlyValues)).toContain(canary);
     expect(agent.observations).toHaveLength(2);
     expect(providerRequests).toHaveLength(2);
     expect(providerRequests[0]).toMatchObject({
@@ -221,10 +339,21 @@ describe("screenshot-only observation boundary", () => {
     expect(openedUrl).toBe("https://example.test/tasks/visual-similarity?participant_id=A001&model=google%2Fgemini-3.7-flash&run=dev");
 
     assertBoundaryValue("observations", agent.observations);
-    assertBoundaryValue("provider requests", providerRequests);
+    assertNoStructuralBoundaryLeak("observations", agent.observations);
+    assertBoundaryValue("initial request", transport.requests[0]);
+    assertNoStructuralBoundaryLeak("initial request", transport.requests[0]);
+    assertBoundaryValue("continuation request", transport.requests[1]);
+    assertNoStructuralBoundaryLeak("continuation request", transport.requests[1]);
+    assertBoundaryValue("provider requests", transport.requests);
+    assertNoStructuralBoundaryLeak("provider requests", transport.requests);
     assertBoundaryValue("action results", agent.actionResults);
+    assertNoStructuralBoundaryLeak("action results", agent.actionResults);
     assertBoundaryValue("backend events", deliveredBackendEvents);
+    assertNoStructuralBoundaryLeak("backend events", deliveredBackendEvents);
     assertBoundaryValue("persisted logs", persistedLog);
+    for (const event of persistedLog.trim().split("\n").map((line) => JSON.parse(line))) {
+      assertNoStructuralBoundaryLeak("persisted log event", event);
+    }
     expect(JSON.parse(JSON.stringify(agent.observations[0]))).toEqual({
       screenshot: { "0": 255, "1": 216, "2": 255 },
       mimeType: "image/jpeg",
