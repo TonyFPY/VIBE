@@ -6,6 +6,7 @@
     "start": "tsx src/cli.ts",
     "test": "vitest run",
     "test:integration": "RUN_PLAYWRIGHT_INTEGRATION=1 vitest run tests/integration",
+    "test:live": "RUN_GOOGLE_SMOKE=1 vitest run --config vitest.live.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

@@ -5,8 +5,9 @@ import type { BrowserHost, BrowserSession } from "../browser/browser-types";
 import { buildTaskUrl } from "../config/load-config";
 import type { HarnessConfig } from "../config/types";
 import type { RunLoggerPort } from "../logging/run-logger";
+import { TimingHistogram } from "../metrics/timing";
 import type { ModelAdapter, ModelRequest, ModelResponse } from "../providers/model-adapter";
-import type { RunSummary } from "./run-state";
+import type { RunSummary, RunTimingSummary } from "./run-state";
 
 export interface RunLoopDependencies {
   browserHost: BrowserHost;
@@ -46,6 +47,22 @@ export class RunLoop {
 
   async run(config: HarnessConfig, publicInstruction: string): Promise<RunSummary> {
     const startedAtMs = this.nowMs();
+    const timing = {
+      navigation: new TimingHistogram(),
+      screenshotAndLog: new TimingHistogram(),
+      provider: new TimingHistogram(),
+      parseAndValidate: new TimingHistogram(),
+      actionAndLog: new TimingHistogram(),
+      settle: new TimingHistogram(),
+    };
+    const timingSummary = (): RunTimingSummary => ({
+      navigation: timing.navigation.summary(),
+      screenshotAndLog: timing.screenshotAndLog.summary(),
+      provider: timing.provider.summary(),
+      parseAndValidate: timing.parseAndValidate.summary(),
+      actionAndLog: timing.actionAndLog.summary(),
+      settle: timing.settle.summary(),
+    });
     let session: BrowserSession | undefined;
     let summary: RunSummary = {
       status: "failed",
@@ -53,13 +70,16 @@ export class RunLoop {
       observationCount: 0,
       actionCount: 0,
       invalidActionCount: 0,
+      timings: timingSummary(),
       failureReason: "run did not start",
     };
 
     try {
       const url = buildTaskUrl(config);
+      const navigationStartedAt = this.nowMs();
       session = await this.dependencies.browserHost.openSession(url, config.viewport);
-      let screenshot = await this.captureObservation(session, config, summary);
+      timing.navigation.observe(this.nowMs() - navigationStartedAt);
+      let screenshot = await this.captureObservation(session, config, summary, timing.screenshotAndLog);
       let validationFeedback: string | undefined;
       summary = { ...summary, status: "incomplete", failureReason: "step limit reached" };
       const rejectAction = async (error: string): Promise<boolean> => {
@@ -89,7 +109,9 @@ export class RunLoop {
           allowedActions,
           validationFeedback,
         };
+        const providerStartedAt = this.nowMs();
         const modelResponse = await this.requestWithTimeout(modelRequest, config.performance.requestTimeoutMs);
+        timing.provider.observe(this.nowMs() - providerStartedAt);
         await this.dependencies.logger.log({
           type: "model-response",
           at: this.nowIso(),
@@ -102,18 +124,22 @@ export class RunLoop {
           modelResponseCompletedAt: modelResponse.completedAt,
         });
 
+        const parseStartedAt = this.nowMs();
         const parsed = parseRawAction(modelResponse.rawOutput);
         if (!parsed.valid) {
+          timing.parseAndValidate.observe(this.nowMs() - parseStartedAt);
           if (await rejectAction(parsed.error)) break;
           continue;
         }
         const policy = validateActionBounds(parsed.action, config.viewport);
+        timing.parseAndValidate.observe(this.nowMs() - parseStartedAt);
         if (!policy.valid) {
           if (await rejectAction(policy.error)) break;
           continue;
         }
 
         validationFeedback = undefined;
+        const actionStartedAt = this.nowMs();
         const execution = await executeAgentAction(session, parsed.action);
         await this.dependencies.logger.log({
           type: "action",
@@ -122,13 +148,16 @@ export class RunLoop {
           parsedAction: parsed.action,
           actionValid: true,
         });
+        timing.actionAndLog.observe(this.nowMs() - actionStartedAt);
         if (execution === "done") {
           summary = { ...summary, status: "completed", failureReason: undefined };
           break;
         }
         summary.actionCount += 1;
+        const settleStartedAt = this.nowMs();
         await this.sleep(config.performance.settleDelayMs);
-        screenshot = await this.captureObservation(session, config, summary);
+        timing.settle.observe(this.nowMs() - settleStartedAt);
+        screenshot = await this.captureObservation(session, config, summary, timing.screenshotAndLog);
       }
     } catch (error) {
       summary = { ...summary, status: "failed", failureReason: errorMessage(error) };
@@ -140,6 +169,7 @@ export class RunLoop {
           if (summary.status !== "failed") summary = { ...summary, status: "failed", failureReason: errorMessage(error) };
         }
       }
+      summary = { ...summary, timings: timingSummary() };
       try {
         await this.dependencies.logger.log({ type: "terminal", at: this.nowIso(), summary });
       } finally {
@@ -153,7 +183,9 @@ export class RunLoop {
     session: BrowserSession,
     config: HarnessConfig,
     summary: RunSummary,
+    timing: TimingHistogram,
   ): Promise<Uint8Array> {
+    const startedAt = this.nowMs();
     const screenshot = await session.screenshot(config.screenshotQuality);
     summary.observationCount += 1;
     const screenshotId = `screenshot-${String(summary.observationCount).padStart(4, "0")}`;
@@ -166,6 +198,7 @@ export class RunLoop {
       viewport: config.viewport,
       screenshotQuality: config.screenshotQuality,
     });
+    timing.observe(this.nowMs() - startedAt);
     return screenshot;
   }
 

@@ -12,7 +12,7 @@ From the repository root:
 
 ```bash
 npm --prefix agent_harness install
-npx --prefix agent_harness playwright install chromium
+npm --prefix agent_harness exec -- playwright install chromium
 ```
 
 Set up Google Application Default Credentials and enable the selected model in
@@ -59,7 +59,9 @@ npm --prefix agent_harness start -- --config /absolute/path/to/run.json
 The CLI prints a redacted terminal summary. Exit code `0` means the model
 returned `DONE`, `2` means incomplete, and `1` means failed. Private JPEGs and
 streamed JSON Lines events are written under `agent_harness/runs/<run-id>/` by
-default and are ignored by Git.
+default and are ignored by Git. The terminal event includes constant-memory
+count, total, median-bucket, and p95-bucket timing summaries for navigation,
+screenshots/logging, provider calls, parsing, actions, and settling.
 
 The website remains responsible for session IDs, response records, cursor
 trajectories, and result saving. The harness never uploads a second result
@@ -95,5 +97,17 @@ fixture and mock actions:
 npm --prefix agent_harness run test:integration
 ```
 
-Live Google model testing is opt-in and documented separately after a model is
-enabled and ADC is configured.
+Live Google model testing is opt-in after a vision model is enabled and ADC is
+configured. It uses `run=dev`, stops after at most ten model steps, and writes
+temporary logs outside the repository:
+
+```bash
+export GOOGLE_CLOUD_PROJECT=your-project-id
+export GOOGLE_CLOUD_LOCATION=global
+export AGENT_TASK_URL=https://vibe-9d6e5.web.app/tasks/visual-similarity
+export AGENT_MODEL=google/gemini-3.5-flash
+npm --prefix agent_harness run test:live
+```
+
+This command can incur model charges. It is excluded from `npm test` and must
+never be added to unattended CI.

@@ -74,6 +74,11 @@ describe("serialized agent run loop", () => {
       observationCount: 3,
       actionCount: 2,
       invalidActionCount: 0,
+      timings: {
+        provider: { count: 3 },
+        screenshotAndLog: { count: 3 },
+        actionAndLog: { count: 3 },
+      },
     });
     expect(run.browserActions).toEqual([["MOVE", 540, 338], ["CLICK", 756, 386], ["CLOSE"]]);
     expect(run.writtenScreenshots).toHaveLength(3);
