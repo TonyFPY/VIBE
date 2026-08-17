@@ -203,6 +203,68 @@ class RecordingAgent implements ComputerUseAgent {
   }
 }
 
+class FakeEvaluatorSessionState implements BrowserHost {
+  readonly evaluatorValues: unknown[] = [];
+  private readonly backendListeners = new Set<(event: BackendEvent) => void>();
+  private clickCount = 0;
+
+  constructor(
+    private readonly fixture: PrivateBoundaryFixture,
+    private readonly recordDeliveredEvent: (event: BackendEvent) => void,
+  ) {}
+
+  async openSession(url: string, _viewport: { width: 1080; height: 675 }): Promise<BrowserSession> {
+    this.evaluatorValues.push({
+      url,
+      privateTrial: this.fixture.privateTrial,
+      internalTaskRecord: this.fixture.internalTaskRecord,
+      pageLikeObject: this.fixture.pageLikeObject,
+    });
+    return {
+      screenshot: async () => {
+        this.evaluatorValues.push({
+          privateTrial: this.fixture.privateTrial,
+          internalTaskRecord: this.fixture.internalTaskRecord,
+          page: this.fixture.pageLikeObject,
+          pageUrl: this.fixture.pageLikeObject.url(),
+          pageText: this.fixture.pageLikeObject.evaluate(),
+        });
+        return screenshot;
+      },
+      move: async () => undefined,
+      click: async () => {
+        this.clickCount += 1;
+        this.evaluatorValues.push({
+          privateTrial: this.fixture.privateTrial,
+          internalTaskRecord: this.fixture.internalTaskRecord,
+          page: this.fixture.pageLikeObject,
+          requestBody: this.fixture.backend.requestBody,
+          responseBody: this.fixture.backend.responseBody,
+        });
+        if (this.clickCount === 2) {
+          this.emit({ type: "results-response", status: 202, ok: false });
+        }
+        if (this.clickCount === 4) {
+          this.evaluatorValues.push({ error: `backend request failed ${this.fixture.backend.url}` });
+          this.emit({ type: "results-request-failed", error: "backend request failed" });
+        }
+      },
+      subscribeBackendEvents: (listener) => {
+        this.backendListeners.add(listener);
+        return () => this.backendListeners.delete(listener);
+      },
+      close: async () => undefined,
+    };
+  }
+
+  async close(): Promise<void> {}
+
+  private emit(event: BackendEvent): void {
+    this.recordDeliveredEvent(event);
+    for (const listener of this.backendListeners) listener(event);
+  }
+}
+
 describe("screenshot-only observation boundary", () => {
   let logRoot: string | undefined;
 
@@ -213,7 +275,6 @@ describe("screenshot-only observation boundary", () => {
 
   it("keeps private task data, page state, URLs, and bodies out of Gemini requests and persisted logs", async () => {
     logRoot = await mkdtemp(join(tmpdir(), "agent-harness-boundary-"));
-    const evaluatorOnlyValues: unknown[] = [];
     const transport = new FakeGeminiTransport(privateFixture.providerBodies);
     const agent = new RecordingAgent(new GeminiComputerUseAgent({
       apiKey: "test-key",
@@ -231,65 +292,15 @@ describe("screenshot-only observation boundary", () => {
     });
     const deliveredBackendEvents: BackendEvent[] = [];
     let openedUrl = "";
-    let clickCount = 0;
-    let backendListener: ((event: BackendEvent) => void) | undefined;
-    const session: BrowserSession = {
-      screenshot: async () => screenshot,
-      move: async () => undefined,
-      click: async () => {
-        clickCount += 1;
-        if (clickCount === 2) {
-          const rawBackendResponse = {
-            page: privateFixture.pageLikeObject,
-            url: privateFixture.backend.url,
-            requestBody: privateFixture.backend.requestBody,
-            responseBody: privateFixture.backend.responseBody,
-            status: 202,
-            ok: false,
-          };
-          evaluatorOnlyValues.push(rawBackendResponse);
-          const event = {
-            type: "results-response",
-            status: rawBackendResponse.status,
-            ok: rawBackendResponse.ok,
-          } as const;
-          deliveredBackendEvents.push({ type: event.type, status: event.status, ok: event.ok });
-          backendListener?.(event);
-        }
-        if (clickCount === 4) {
-          const rawBackendFailure = {
-            page: privateFixture.pageLikeObject,
-            url: privateFixture.backend.url,
-            requestBody: privateFixture.backend.requestBody,
-            responseBody: privateFixture.backend.responseBody,
-            error: `backend request failed ${canary}`,
-          };
-          evaluatorOnlyValues.push(rawBackendFailure);
-          const event = { type: "results-request-failed", error: "backend request failed" } as const;
-          deliveredBackendEvents.push({ type: event.type, error: event.error });
-          backendListener?.(event);
-        }
-      },
-      subscribeBackendEvents: (listener) => {
-        backendListener = listener;
-        return () => { backendListener = undefined; };
-      },
-      close: async () => undefined,
-    };
+    const evaluator = new FakeEvaluatorSessionState(privateFixture, (event) => {
+      deliveredBackendEvents.push(event);
+    });
     const browserHost: BrowserHost = {
-      openSession: async (url) => {
+      openSession: async (url, viewport) => {
         openedUrl = url;
-        evaluatorOnlyValues.push(
-          privateFixture.privateTrial,
-          privateFixture.internalTaskRecord,
-          privateFixture.pageLikeObject,
-          privateFixture.pageLikeObject.url(),
-          privateFixture.pageLikeObject.evaluate(),
-          privateFixture.pageLikeObject.body,
-        );
-        return session;
+        return evaluator.openSession(url, viewport);
       },
-      close: async () => undefined,
+      close: () => evaluator.close(),
     };
     const config = parseHarnessConfig({
       taskUrl: `https://example.test/tasks/visual-similarity?answer=${canary}`,
@@ -315,7 +326,7 @@ describe("screenshot-only observation boundary", () => {
     const persistedLog = await readFile(join(logRoot, "boundary-run", "events.jsonl"), "utf8");
     const providerRequests = transport.requests.map((request) => JSON.parse(JSON.stringify(request)));
 
-    expect(JSON.stringify(evaluatorOnlyValues)).toContain(canary);
+    expect(JSON.stringify(evaluator.evaluatorValues)).toContain(canary);
     expect(agent.observations).toHaveLength(2);
     expect(providerRequests).toHaveLength(2);
     expect(providerRequests[0]).toMatchObject({
