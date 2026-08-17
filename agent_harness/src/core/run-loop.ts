@@ -193,6 +193,11 @@ export class RunLoop {
             setStepLimitIfReached,
           );
           if (summary.invalidActionCount >= config.maxInvalidActions) {
+            if (setTerminalFromBackend() || setTimeoutIfExpired() || summary.status === "step_limit") break;
+            if (reportedTurn?.status === "blocked") {
+              summary = { ...summary, status: "failed", failureReason: reportedTurn.failureReason ?? "provider blocked" };
+              break;
+            }
             summary = { ...summary, status: "incomplete", failureReason: "invalid action limit reached" };
             break;
           }

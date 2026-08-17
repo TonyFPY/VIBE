@@ -41,6 +41,10 @@ function createFixture(
     hangProvider?: boolean;
     clickError?: Error;
     closeFailures?: ReadonlySet<string>;
+    onReportActionResult?: (
+      call: { observation: AgentObservation; result: ActionResult; reportIndex: number },
+      session: BrowserSession & { emitBackendEvent(event: BackendEvent): void },
+    ) => void | Promise<void>;
     wait?: (milliseconds: number) => Promise<void>;
   } = {},
 ) {
@@ -59,6 +63,7 @@ function createFixture(
   ];
   let screenshotCalls = 0;
   let turnIndex = 0;
+  let reportIndex = 0;
   let listener: ((event: BackendEvent) => void) | undefined;
 
   const session: BrowserSession & { emitBackendEvent(event: BackendEvent): void } = {
@@ -106,6 +111,8 @@ function createFixture(
     },
     reportActionResult: async (observation, result) => {
       providerCalls.push({ method: "reportActionResult", observation, result });
+      reportIndex += 1;
+      await options.onReportActionResult?.({ observation, result, reportIndex }, session);
       if (options.hangProvider) return new Promise(() => undefined);
       return turns[turnIndex++] ?? finishedTurn();
     },
@@ -368,6 +375,35 @@ describe("stateful computer-use run loop", () => {
       expect.objectContaining({ actionValid: false, error: "click coordinates must be finite CSS pixels inside the viewport" }),
       expect.objectContaining({ actionValid: false, error: "wait milliseconds must be finite and between 0 and 5000" }),
     ]);
+  });
+
+  it("preserves backend completion while reporting the final invalid action", async () => {
+    const run = createFixture([
+      actionTurn([{ type: "click", x: 1080, y: 1 }]),
+      finishedTurn(),
+    ], {
+      onReportActionResult: ({ result }, session) => {
+        expect(result).toMatchObject({
+          status: "rejected",
+          error: "click coordinates must be finite CSS pixels inside the viewport",
+        });
+        session.emitBackendEvent({ type: "results-response", status: 204, ok: true });
+      },
+    });
+
+    await expect(run.loop.run({ ...baseConfig, maxInvalidActions: 1 }, "Visible instruction")).resolves.toMatchObject({
+      status: "completed",
+      failureReason: undefined,
+      actionCount: 0,
+      invalidActionCount: 1,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResult"]);
+    expect(run.providerCalls[1].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
+    expect(run.events).toContainEqual(expect.objectContaining({
+      type: "backend-event",
+      status: 204,
+      ok: true,
+    }));
   });
 
   it("fails after three failed result attempts or a result request failure", async () => {
