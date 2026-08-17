@@ -25,8 +25,9 @@ describe("Google Agent Platform request builders", () => {
         responseMimeType: "application/json",
         thinkingConfig: { thinkingLevel: "medium", includeThoughts: false },
         responseJsonSchema: expect.objectContaining({
-          type: "object",
-          additionalProperties: false,
+          anyOf: expect.arrayContaining([
+            expect.objectContaining({ required: ["type", "x", "y", "purpose"] }),
+          ]),
         }),
       },
     });

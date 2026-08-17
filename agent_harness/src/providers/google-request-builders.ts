@@ -25,15 +25,35 @@ function base64Screenshot(request: ModelRequest): string {
 
 function actionResponseJsonSchema(): Record<string, unknown> {
   return {
-    type: "object",
-    properties: {
-      type: { type: "string", enum: ["CLICK", "MOVE", "DONE"] },
-      x: { type: "number" },
-      y: { type: "number" },
-      purpose: { type: "string", enum: ["navigation", "response"] },
-    },
-    required: ["type"],
-    additionalProperties: false,
+    anyOf: [
+      {
+        type: "object",
+        properties: { type: { type: "string", enum: ["DONE"] } },
+        required: ["type"],
+        additionalProperties: false,
+      },
+      {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["MOVE"] },
+          x: { type: "number" },
+          y: { type: "number" },
+        },
+        required: ["type", "x", "y"],
+        additionalProperties: false,
+      },
+      {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["CLICK"] },
+          x: { type: "number" },
+          y: { type: "number" },
+          purpose: { type: "string", enum: ["navigation", "response"] },
+        },
+        required: ["type", "x", "y", "purpose"],
+        additionalProperties: false,
+      },
+    ],
   };
 }
 
