@@ -5,6 +5,9 @@ import type {
   BrowserLauncherPort,
   BrowserPagePort,
   BrowserPort,
+  BrowserRequestFailurePort,
+  BrowserResponsePort,
+  BackendEvent,
   BrowserSession,
 } from "./browser-types";
 
@@ -13,6 +16,7 @@ export interface PlaywrightBrowserHostOptions {
   headless?: boolean;
   settleDelayMs: number;
   navigationTimeoutMs: number;
+  mouseMoveSteps?: number;
 }
 
 const defaultLauncher: BrowserLauncherPort = {
@@ -65,6 +69,9 @@ function cursorVisibilityScript(visible: boolean): string {
   })()`;
 }
 
+const resultsPathname = "/api/experiments/sessions";
+const maxBackendErrorLength = 200;
+
 export class PlaywrightBrowserHost implements BrowserHost {
   private browserPromise?: Promise<BrowserPort>;
   private closed = false;
@@ -80,6 +87,30 @@ export class PlaywrightBrowserHost implements BrowserHost {
     const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
     try {
       const page = await context.newPage();
+      const subscribers = new Set<(event: BackendEvent) => void>();
+      const isResultsRequest = (request: { method(): string; url(): string }): boolean => {
+        if (request.method() !== "POST") return false;
+        try {
+          return new URL(request.url()).pathname === resultsPathname;
+        } catch {
+          return false;
+        }
+      };
+      const responseListener = (response: BrowserResponsePort) => {
+        if (!isResultsRequest(response.request())) return;
+        const event: BackendEvent = { type: "results-response", status: response.status(), ok: response.ok() };
+        subscribers.forEach((listener) => listener(event));
+      };
+      const requestFailedListener = (request: BrowserRequestFailurePort) => {
+        if (!isResultsRequest(request)) return;
+        const error = request.failure()?.errorText || "Request failed";
+        subscribers.forEach((listener) => listener({
+          type: "results-request-failed",
+          error: error.slice(0, maxBackendErrorLength),
+        }));
+      };
+      page.on("response", responseListener);
+      page.on("requestfailed", requestFailedListener);
       await page.goto(url, { waitUntil: "load", timeout: this.options.navigationTimeoutMs });
       await wait(this.options.settleDelayMs);
       let sessionClosed = false;
@@ -99,7 +130,7 @@ export class PlaywrightBrowserHost implements BrowserHost {
         },
         move: async (x: number, y: number) => {
           assertOpen();
-          await page.mouse.move(x, y);
+          await page.mouse.move(x, y, { steps: this.options.mouseMoveSteps ?? 10 });
           await this.updateCursor(page, x, y, false);
         },
         click: async (x: number, y: number) => {
@@ -110,10 +141,20 @@ export class PlaywrightBrowserHost implements BrowserHost {
         close: async () => {
           if (sessionClosed) return;
           sessionClosed = true;
+          page.off("response", responseListener);
+          page.off("requestfailed", requestFailedListener);
+          subscribers.clear();
           await context.close();
+        },
+        subscribeBackendEvents: (listener: (event: BackendEvent) => void) => {
+          assertOpen();
+          subscribers.add(listener);
+          return () => { subscribers.delete(listener); };
         },
       });
     } catch (error) {
+      // The listeners are registered before navigation so submissions during page load are observed.
+      // Context closure also detaches Playwright listeners when session creation fails.
       await context.close();
       throw error;
     }

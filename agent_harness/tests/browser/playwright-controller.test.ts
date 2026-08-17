@@ -6,14 +6,28 @@ import type {
   BrowserLauncherPort,
   BrowserPagePort,
   BrowserPort,
+  BrowserRequestFailurePort,
+  BrowserResponsePort,
 } from "../../src/browser/browser-types";
 
 function createFixture() {
   const events: unknown[] = [];
+  const responseListeners: Array<(response: BrowserResponsePort) => void> = [];
+  const requestFailedListeners: Array<(request: BrowserRequestFailurePort) => void> = [];
   const page: BrowserPagePort = {
     mouse: {
-      move: async (x, y) => { events.push(["move", x, y]); },
+      move: async (x, y, options) => { events.push(["move", x, y, ...(options ? [options] : [])]); },
       click: async (x, y) => { events.push(["click", x, y]); },
+    },
+    on: (event, listener) => {
+      events.push(["on", event]);
+      if (event === "response") responseListeners.push(listener as (response: BrowserResponsePort) => void);
+      else requestFailedListeners.push(listener as (request: BrowserRequestFailurePort) => void);
+    },
+    off: (event, listener) => {
+      events.push(["off", event]);
+      if (event === "response") responseListeners.splice(responseListeners.indexOf(listener as (response: BrowserResponsePort) => void), 1);
+      else requestFailedListeners.splice(requestFailedListeners.indexOf(listener as (request: BrowserRequestFailurePort) => void), 1);
     },
     goto: async (url, options) => { events.push(["goto", url, options]); },
     evaluate: async (expression) => { events.push(["evaluate", expression]); },
@@ -41,7 +55,13 @@ function createFixture() {
       return browser;
     },
   };
-  return { events, launcher, launches: () => launches };
+  return {
+    events,
+    launcher,
+    launches: () => launches,
+    emitResponse: (response: BrowserResponsePort) => responseListeners.forEach((listener) => listener(response)),
+    emitRequestFailed: (request: BrowserRequestFailurePort) => requestFailedListeners.forEach((listener) => listener(request)),
+  };
 }
 
 describe("PlaywrightBrowserHost", () => {
@@ -94,8 +114,62 @@ describe("PlaywrightBrowserHost", () => {
     await session.click(756, 386);
 
     expect(fixture.events).toContainEqual(["screenshot", { type: "jpeg", quality: 90 }]);
-    expect(fixture.events).toContainEqual(["move", 540, 338]);
+    expect(fixture.events).toContainEqual(["move", 540, 338, { steps: 10 }]);
     expect(fixture.events).toContainEqual(["click", 756, 386]);
-    expect(Object.keys(session).sort()).toEqual(["click", "close", "move", "screenshot"]);
+    expect(Object.keys(session).sort()).toEqual(["click", "close", "move", "screenshot", "subscribeBackendEvents"]);
+  });
+
+  it("forwards only evaluator result metadata and removes backend listeners on close", async () => {
+    const fixture = createFixture();
+    const host = new PlaywrightBrowserHost({ launcher: fixture.launcher, settleDelayMs: 0, navigationTimeoutMs: 10_000 });
+    const session = await host.openSession("https://example.test/tasks/visual-similarity", { width: 1080, height: 675 });
+    const received: unknown[] = [];
+    session.subscribeBackendEvents((event) => received.push(event));
+
+    fixture.emitResponse({
+      request: () => ({ method: () => "POST", url: () => "https://example.test/api/experiments/sessions", failure: () => null }),
+      status: () => 200,
+      ok: () => true,
+    });
+    fixture.emitResponse({
+      request: () => ({ method: () => "GET", url: () => "https://example.test/api/experiments/sessions", failure: () => null }),
+      status: () => 500,
+      ok: () => false,
+    });
+    fixture.emitResponse({
+      request: () => ({ method: () => "POST", url: () => "https://example.test/api/experiments/other", failure: () => null }),
+      status: () => 201,
+      ok: () => true,
+    });
+    fixture.emitRequestFailed({
+      method: () => "POST",
+      url: () => "https://example.test/api/experiments/sessions",
+      failure: () => ({ errorText: "SECRET_RESPONSE_BODY_OR_HEADERS" }),
+    });
+
+    expect(received).toEqual([
+      { type: "results-response", status: 200, ok: true },
+      { type: "results-request-failed", error: "SECRET_RESPONSE_BODY_OR_HEADERS" },
+    ]);
+    await session.close();
+    expect(fixture.events.filter((event) => Array.isArray(event) && event[0] === "off")).toEqual([
+      ["off", "response"],
+      ["off", "requestfailed"],
+    ]);
+    fixture.emitRequestFailed({
+      method: () => "POST",
+      url: () => "https://example.test/api/experiments/sessions",
+      failure: () => ({ errorText: "late" }),
+    });
+    expect(received).toHaveLength(2);
+  });
+
+  it("uses the configured deterministic mouse movement steps", async () => {
+    const fixture = createFixture();
+    const host = new PlaywrightBrowserHost({ launcher: fixture.launcher, settleDelayMs: 0, navigationTimeoutMs: 10_000, mouseMoveSteps: 7 });
+    const session = await host.openSession("https://example.test/tasks/visual-similarity", { width: 1080, height: 675 });
+    await session.move(540, 338);
+    expect(fixture.events).toContainEqual(["move", 540, 338, { steps: 7 }]);
+    await session.close();
   });
 });
