@@ -198,6 +198,14 @@ export class RunLoop {
               summary = { ...summary, status: "failed", failureReason: reportedTurn.failureReason ?? "provider blocked" };
               break;
             }
+            if (reportedTurn?.status === "finished") {
+              summary = {
+                ...summary,
+                status: "incomplete",
+                failureReason: reportedTurn.failureReason ?? "provider finished before result response",
+              };
+              break;
+            }
             summary = { ...summary, status: "incomplete", failureReason: "invalid action limit reached" };
             break;
           }

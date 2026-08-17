@@ -342,6 +342,7 @@ describe("stateful computer-use run loop", () => {
       actionTurn([{ type: "move", x: 1, y: 1 }, { type: "click", x: 2, y: 2 }]),
       actionTurn([{ type: "click", x: 1080, y: 1 }]),
       actionTurn([{ type: "wait", milliseconds: 5001 }]),
+      actionTurn([{ type: "move", x: 2, y: 2 }]),
     ]);
 
     await expect(run.loop.run({ ...baseConfig, maxInvalidActions: 3 }, "Visible instruction")).resolves.toMatchObject({
@@ -403,6 +404,28 @@ describe("stateful computer-use run loop", () => {
       type: "backend-event",
       status: 204,
       ok: true,
+    }));
+  });
+
+  it("preserves provider finished state while reporting the final invalid action", async () => {
+    const run = createFixture([
+      actionTurn([{ type: "click", x: 1080, y: 1 }]),
+      finishedTurn(),
+    ]);
+
+    await expect(run.loop.run({ ...baseConfig, maxInvalidActions: 1 }, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete",
+      failureReason: "provider finished before result response",
+      actionCount: 0,
+      invalidActionCount: 1,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResult"]);
+    expect(run.providerCalls[1].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
+    expect(run.providerCalls[1]).toEqual(expect.objectContaining({
+      result: expect.objectContaining({
+        status: "rejected",
+        error: "click coordinates must be finite CSS pixels inside the viewport",
+      }),
     }));
   });
 
