@@ -172,7 +172,7 @@ export class RunLoop {
         }
         screenshot = await this.captureObservation(session, config, summary, timing.screenshotAndLog);
         if (parsed.action.type === "CLICK" && sameBytes(screenshotBeforeAction, screenshot)) {
-          validationFeedback = "The previous click caused no visible change; choose a different coordinate.";
+          validationFeedback = `The previous CLICK at (${parsed.action.x}, ${parsed.action.y}) caused no visible change. Do not repeat that coordinate; choose a different point near the center of the visible target.`;
         }
       }
     } catch (error) {

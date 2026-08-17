@@ -135,7 +135,7 @@ describe("serialized agent run loop", () => {
     ], [Uint8Array.from([1, 2, 3])]);
 
     await run.loop.run(config, "Choose using only the visible screen.");
-    expect(run.requests[1].validationFeedback).toContain("no visible change");
+    expect(run.requests[1].validationFeedback).toBe("The previous CLICK at (500, 443) caused no visible change. Do not repeat that coordinate; choose a different point near the center of the visible target.");
   });
 
   it("terminates incomplete at the invalid-action limit without executing input", async () => {

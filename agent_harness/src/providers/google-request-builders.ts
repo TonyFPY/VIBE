@@ -13,7 +13,7 @@ export function buildPublicPrompt(request: ModelRequest): string {
   return [
     request.publicInstruction,
     "Use only the visible screenshot. Reason privately, then emit exactly one complete JSON action object and no other text, prefix, markdown, or partial JSON.",
-    "Coordinates are screenshot pixels in the original 1080 x 675 screenshot: origin (0,0) is top-left, x increases right, and y increases down. If an action causes no visible change, choose a different coordinate.",
+    "Coordinates are screenshot pixels in the original 1080 x 675 screenshot: origin (0,0) is top-left, x increases right, and y increases down. For every CLICK, aim near the center of the visible target, not its edge. If an action causes no visible change, choose a different coordinate.",
     "After the center cross is clicked and the stimulus appears, choose one visible candidate. For purpose=response, click inside the visible candidate image or frame, never its label or surrounding whitespace.",
     "Allowed action shapes:",
     schemas,
