@@ -40,6 +40,7 @@ function createFixture(
     screenshotError?: Error;
     hangProvider?: boolean;
     clickError?: Error;
+    closeFailures?: ReadonlySet<string>;
     wait?: (milliseconds: number) => Promise<void>;
   } = {},
 ) {
@@ -76,17 +77,24 @@ function createFixture(
       listener = subscriber;
       return () => {
         unsubscribes.push("backend");
+        if (options.closeFailures?.has("backend")) throw new Error("backend unsubscribe failed");
         if (listener === subscriber) listener = undefined;
       };
     },
-    close: async () => { closeCalls.push("session"); },
+    close: async () => {
+      closeCalls.push("session");
+      if (options.closeFailures?.has("session")) throw new Error("session close failed");
+    },
     emitBackendEvent: (event) => { listener?.(event); },
   };
   options.onSession?.(session);
 
   const host: BrowserHost = {
     openSession: async () => session,
-    close: async () => { closeCalls.push("host"); },
+    close: async () => {
+      closeCalls.push("host");
+      if (options.closeFailures?.has("host")) throw new Error("host close failed");
+    },
   };
   const agent: ComputerUseAgent = {
     provider: "fake-provider",
@@ -101,12 +109,18 @@ function createFixture(
       if (options.hangProvider) return new Promise(() => undefined);
       return turns[turnIndex++] ?? finishedTurn();
     },
-    close: async () => { closeCalls.push("agent"); },
+    close: async () => {
+      closeCalls.push("agent");
+      if (options.closeFailures?.has("agent")) throw new Error("agent close failed");
+    },
   };
   const logger: RunLoggerPort = {
     log: async (event) => { events.push(event); },
     writeScreenshot: async (id, bytes) => { writtenScreenshots.push({ id, bytes }); },
-    close: async () => { closeCalls.push("logger"); },
+    close: async () => {
+      closeCalls.push("logger");
+      if (options.closeFailures?.has("logger")) throw new Error("logger close failed");
+    },
   };
   let nowIndex = 0;
   const nowMs = () => {
@@ -219,6 +233,38 @@ describe("stateful computer-use run loop", () => {
     }));
   });
 
+  it("keeps backend success completed when cleanup fails", async () => {
+    const run = createFixture([
+      actionTurn([{ type: "click", x: 756, y: 386 }]),
+      finishedTurn(),
+    ], {
+      closeFailures: new Set(["backend", "agent", "session", "host", "logger"]),
+      onSession: (session) => {
+        const originalClick = session.click;
+        session.click = async (x, y) => {
+          await originalClick(x, y);
+          if (x === 756 && y === 386) session.emitBackendEvent({ type: "results-response", status: 201, ok: true });
+        };
+      },
+    });
+
+    await expect(run.loop.run(baseConfig, "Choose using only the visible screen.")).resolves.toMatchObject({
+      status: "completed",
+      failureReason: undefined,
+    });
+    expect(run.closeCalls).toEqual(["agent", "session", "host", "logger"]);
+    expect(run.unsubscribes).toEqual(["backend"]);
+    expect(run.events).toContainEqual(expect.objectContaining({
+      type: "cleanup-error",
+      phase: "agent",
+      error: "agent close failed",
+    }));
+    expect(run.events.at(-1)).toMatchObject({
+      type: "terminal",
+      summary: expect.objectContaining({ status: "completed", failureReason: undefined }),
+    });
+  });
+
   it("fails when the provider blocks and preserves the provider reason", async () => {
     const run = createFixture([blockedTurn("safety blocked")]);
 
@@ -304,11 +350,19 @@ describe("stateful computer-use run loop", () => {
       "next",
       "reportActionResult",
       "reportActionResult",
+      "reportActionResult",
     ]);
     expect(run.providerCalls.slice(1)).toEqual([
       expect.objectContaining({ result: expect.objectContaining({ status: "rejected" }) }),
       expect.objectContaining({ result: expect.objectContaining({ status: "rejected" }) }),
+      expect.objectContaining({ result: expect.objectContaining({
+        status: "rejected",
+        error: "wait milliseconds must be finite and between 0 and 5000",
+      }) }),
     ]);
+    expect(run.providerCalls[1].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
+    expect(run.providerCalls[2].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
+    expect(run.providerCalls[3].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
     expect(run.events.filter((event) => event.type === "action")).toEqual([
       expect.objectContaining({ actionValid: false, error: "Provider returned 2 actions; exactly one action is required" }),
       expect.objectContaining({ actionValid: false, error: "click coordinates must be finite CSS pixels inside the viewport" }),

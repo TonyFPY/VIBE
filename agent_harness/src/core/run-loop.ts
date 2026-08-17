@@ -110,6 +110,23 @@ export class RunLoop {
       summary = { ...summary, status: "step_limit", failureReason: "action turn limit reached" };
       return true;
     };
+    const recordCleanupFailure = async (phase: string, error: unknown): Promise<void> => {
+      if (summary.status !== "completed") {
+        summary = { ...summary, status: "failed", failureReason: errorMessage(error) };
+      }
+      try {
+        await this.dependencies.logger.log({
+          type: "cleanup-error",
+          at: this.nowIso(),
+          phase,
+          error: errorMessage(error),
+        });
+      } catch {
+        if (summary.status !== "completed") {
+          summary = { ...summary, status: "failed", failureReason: "cleanup failed and cleanup logging failed" };
+        }
+      }
+    };
 
     try {
       const url = buildTaskUrl(config);
@@ -164,11 +181,7 @@ export class RunLoop {
             error: actionValidation.error,
           };
           await this.logAction(summary.stepCount, rejectedResult.action, false, actionValidation.error);
-          if (summary.invalidActionCount >= config.maxInvalidActions) {
-            summary = { ...summary, status: "incomplete", failureReason: "invalid action limit reached" };
-            break;
-          }
-          turn = await this.callProvider(
+          const reportedTurn = await this.callProvider(
             "reportActionResult",
             observation,
             rejectedResult,
@@ -179,6 +192,11 @@ export class RunLoop {
             setTimeoutIfExpired,
             setStepLimitIfReached,
           );
+          if (summary.invalidActionCount >= config.maxInvalidActions) {
+            summary = { ...summary, status: "incomplete", failureReason: "invalid action limit reached" };
+            break;
+          }
+          turn = reportedTurn;
           continue;
         }
 
@@ -224,25 +242,32 @@ export class RunLoop {
         try {
           unsubscribeBackendEvents();
         } catch (error) {
-          if (summary.status !== "failed") summary = { ...summary, status: "failed", failureReason: errorMessage(error) };
+          await recordCleanupFailure("backend", error);
         }
       }
-      for (const close of [
-        () => this.dependencies.agent.close(),
-        () => session?.close(),
-        () => this.dependencies.browserHost.close(),
-      ]) {
+      const cleanupSteps: Array<[phase: string, close: () => Promise<void> | undefined]> = [
+        ["agent", () => this.dependencies.agent.close()],
+        ["session", () => session?.close()],
+        ["host", () => this.dependencies.browserHost.close()],
+      ];
+      for (const [phase, close] of cleanupSteps) {
         try {
           await close();
         } catch (error) {
-          if (summary.status !== "failed") summary = { ...summary, status: "failed", failureReason: errorMessage(error) };
+          await recordCleanupFailure(phase, error);
         }
       }
       summary = { ...summary, timings: timingSummary() };
       try {
         await this.dependencies.logger.log({ type: "terminal", at: this.nowIso(), summary });
       } finally {
-        await this.dependencies.logger.close();
+        try {
+          await this.dependencies.logger.close();
+        } catch (error) {
+          if (summary.status !== "completed") {
+            summary = { ...summary, status: "failed", failureReason: errorMessage(error) };
+          }
+        }
       }
     }
     return summary;
