@@ -86,7 +86,7 @@ Run configuration
        v
 Firebase task URL ---> Playwright controller
                             |
-                     viewport PNG only
+                     viewport JPEG only
                             |
                             v
                  GoogleAgentPlatformAdapter
@@ -104,7 +104,7 @@ Firebase task URL ---> Playwright controller
                             |
                      Playwright execution
                             |
-                    next viewport PNG
+                    next viewport JPEG
 ```
 
 Playwright and model access are separated by a typed observation boundary.
@@ -125,7 +125,7 @@ interface ModelAdapter {
 
 interface ModelRequest {
   screenshot: Uint8Array;
-  mimeType: "image/png";
+  mimeType: "image/jpeg";
   publicInstruction: string;
   allowedActions: readonly AgentActionType[];
 }
@@ -198,6 +198,7 @@ A run configuration contains operational inputs only:
   "location": "global",
   "runMode": "dev",
   "viewport": { "width": 1080, "height": 675 },
+  "screenshotQuality": 90,
   "maxSteps": 100,
   "maxInvalidActions": 3
 }
@@ -224,7 +225,8 @@ cross-run memory.
 
 Each observation contains exactly:
 
-- PNG bytes captured from the fixed browser viewport;
+- JPEG bytes captured from the fixed browser viewport at the configured
+  quality;
 - the participant-visible task instruction;
 - the allowed action names.
 
@@ -237,9 +239,15 @@ It must not contain:
 - task configuration, repository files, or environment variables;
 - response history containing private controller state.
 
-Screenshots are passed to adapters as memory bytes. A screenshot may be written
-to the private run log after it receives a generated screenshot ID, but neither
-that ID nor its filesystem path is sent to the model.
+Screenshots are passed to adapters as memory bytes. Playwright captures JPEG
+directly rather than producing PNG and converting it afterward. The default
+quality is 90, which reduces memory, network payload, and private log storage
+while limiting compression artifacts in the visual stimuli. Configuration
+validation accepts quality values from 80 through 100 and records the selected
+value in the run log. A screenshot may be written to the private run log after
+it receives a generated screenshot ID, but neither that ID nor its filesystem
+path is sent to the model. The run loop retains only the current screenshot
+buffer and releases it after the provider request and private log write finish.
 
 ## Actions and Execution
 
@@ -275,8 +283,8 @@ For every run:
 1. Validate configuration and resolve a vision-capable model catalog entry.
 2. Create a fresh Chromium context with the configured viewport.
 3. Open the constructed Firebase task URL.
-4. Capture the viewport as PNG bytes.
-5. Send the PNG, public instruction, and action allowlist through the adapter.
+4. Capture the viewport directly as JPEG bytes at the configured quality.
+5. Send the JPEG, public instruction, and action allowlist through the adapter.
 6. Log the raw response and parse it with the shared strict action parser.
 7. Validate the action type, purpose, coordinate bounds, and run policy.
 8. Execute a valid public pointer action, or record an invalid action without
@@ -299,6 +307,7 @@ website session ID if publicly available at completion
 provider and exact model ID
 model catalog protocol and location
 viewport
+screenshot quality
 screenshot ID
 step and observation count
 model request start and completion timestamps
@@ -335,7 +344,7 @@ are never logged.
 
 ### Unit tests
 
-- configuration validation and URL construction;
+- configuration validation, JPEG quality bounds, and URL construction;
 - model catalog resolution and vision-capability checks;
 - request-builder selection for all three Google API families;
 - strict parsing for `CLICK`, `MOVE`, and `DONE`;
