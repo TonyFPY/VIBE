@@ -1,5 +1,10 @@
 # Agent Harness Design
 
+> Superseded: this 2026-08-16 custom protocol design has been replaced by
+> [the 2026-08-17 Gemini Computer Use design](2026-08-17-gemini-computer-use-adapter-design.md)
+> and [implementation plan](../plans/2026-08-17-gemini-computer-use-adapter.md).
+> Keep this file only as historical context.
+
 ## Purpose
 
 Add a model-adaptable visual-agent runner under `agent_harness/`. The runner

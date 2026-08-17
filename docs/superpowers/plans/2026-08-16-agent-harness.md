@@ -1,5 +1,10 @@
 # Agent Harness Implementation Plan
 
+> Superseded: this 2026-08-16 custom protocol plan has been replaced by
+> [the 2026-08-17 Gemini Computer Use design](../specs/2026-08-17-gemini-computer-use-adapter-design.md)
+> and [implementation plan](2026-08-17-gemini-computer-use-adapter.md).
+> Keep this file only as historical context.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task with review checkpoints.
 
 **Goal:** Build an isolated `agent_harness` CLI that opens a deployed Firebase experiment in Chromium, sends JPEG screenshots to Google Agent Platform vision models, executes only validated pointer actions, and preserves the website’s existing result-saving pipeline.

@@ -21,8 +21,10 @@ export interface RunLoggerOptions {
 }
 
 const sensitiveKey = /authorization|access.?token|refresh.?token|private.?key|client.?secret|password/i;
+const bodyKey = /^(body|request[_-]?body|response[_-]?body)$/i;
 
 function redact(value: unknown, sensitiveValues: readonly string[], key?: string): unknown {
+  if (key && bodyKey.test(key)) return undefined;
   if (key && sensitiveKey.test(key)) return "[REDACTED]";
   if (typeof value === "string") {
     return sensitiveValues.reduce((result, sensitive) => (
@@ -31,12 +33,24 @@ function redact(value: unknown, sensitiveValues: readonly string[], key?: string
   }
   if (Array.isArray(value)) return value.map((entry) => redact(entry, sensitiveValues));
   if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [
-      entryKey,
-      redact(entryValue, sensitiveValues, entryKey),
-    ]));
+    return Object.fromEntries(Object.entries(value).flatMap(([entryKey, entryValue]) => {
+      const redacted = redact(entryValue, sensitiveValues, entryKey);
+      return redacted === undefined && bodyKey.test(entryKey) ? [] : [[entryKey, redacted]];
+    }));
   }
   return value;
+}
+
+function persistedEvent(event: RunLogEvent, sensitiveValues: readonly string[]): unknown {
+  if (event.type === "backend-event") {
+    return {
+      type: event.type,
+      at: event.at,
+      ...(typeof event.status === "number" ? { status: event.status } : {}),
+      ...(typeof event.ok === "boolean" ? { ok: event.ok } : {}),
+    };
+  }
+  return redact(event, sensitiveValues);
 }
 
 export class RunLogger implements RunLoggerPort {
@@ -59,7 +73,7 @@ export class RunLogger implements RunLoggerPort {
 
   async log(event: RunLogEvent): Promise<void> {
     this.assertOpen();
-    await this.eventFile.appendFile(`${JSON.stringify(redact(event, this.sensitiveValues))}\n`, "utf8");
+    await this.eventFile.appendFile(`${JSON.stringify(persistedEvent(event, this.sensitiveValues))}\n`, "utf8");
   }
 
   async writeScreenshot(screenshotId: string, bytes: Uint8Array): Promise<void> {
