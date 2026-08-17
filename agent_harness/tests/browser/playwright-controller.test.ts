@@ -16,6 +16,7 @@ function createFixture() {
       click: async (x, y) => { events.push(["click", x, y]); },
     },
     goto: async (url, options) => { events.push(["goto", url, options]); },
+    evaluate: async (expression) => { events.push(["evaluate", expression]); },
     screenshot: async (options) => {
       events.push(["screenshot", options]);
       return Uint8Array.from([0xff, 0xd8, 0xff]);
@@ -54,11 +55,15 @@ describe("PlaywrightBrowserHost", () => {
     const headedFixture = createFixture();
     const headedHost = new PlaywrightBrowserHost({ launcher: headedFixture.launcher, headless: false, settleDelayMs: 0, navigationTimeoutMs: 10_000 });
     const headedSession = await headedHost.openSession("https://example.test/tasks/visual-similarity", { width: 1080, height: 675 });
+    await headedSession.move(540, 338);
+    await headedSession.screenshot(90);
     await headedSession.close();
     await headedHost.close();
 
     expect(headlessFixture.events).toContainEqual(["launch", { headless: true }]);
     expect(headedFixture.events).toContainEqual(["launch", { headless: false }]);
+    expect(headedFixture.events.some((event) => Array.isArray(event) && event[0] === "evaluate" && String(event[1]).includes("agent-harness-cursor"))).toBe(true);
+    expect(headedFixture.events.some((event) => Array.isArray(event) && event[0] === "evaluate" && String(event[1]).includes("style.display"))).toBe(true);
   });
 
   it("reuses Chromium while isolating each run in a scale-factor-one context", async () => {

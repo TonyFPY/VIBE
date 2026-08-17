@@ -69,8 +69,9 @@ npm --prefix agent_harness start -- --config /absolute/path/to/run.json --headed
 ```
 
 Runs are headless by default, which is suitable for CI. Add `--headed` to
-watch the Chromium window and the mouse interactions; headed mode requires a
-graphical display.
+watch the Chromium window and the mouse interactions. Headed mode renders a
+small controller-only pointer marker because Playwright's virtual mouse does
+not move the operating-system cursor; it requires a graphical display.
 
 The CLI prints a redacted terminal summary. Exit code `0` means the model
 returned `DONE`, `2` means incomplete, and `1` means failed. Private JPEGs and

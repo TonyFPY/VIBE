@@ -35,6 +35,7 @@ describe("Google Agent Platform request builders", () => {
     expect(JSON.stringify(body)).toContain("Choose using only the visible screen.");
     expect(JSON.stringify(body)).toContain("1080 x 675 screenshot");
     expect(JSON.stringify(body)).toContain("Reason privately, then emit exactly one complete JSON action object");
+    expect(JSON.stringify(body)).toContain("For purpose=response, click inside the visible candidate image or frame, never its label or surrounding whitespace");
   });
 
   it("builds an OpenAI-compatible multimodal request without a local path", () => {

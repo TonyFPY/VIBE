@@ -6,6 +6,8 @@ export interface BrowserMousePort {
 export interface BrowserPagePort {
   readonly mouse: BrowserMousePort;
   goto(url: string, options: { waitUntil: "load"; timeout: number }): Promise<unknown>;
+  /** Optional controller-only overlay hook; never exposed to the model. */
+  evaluate?(expression: string): Promise<unknown>;
   screenshot(options: { type: "jpeg"; quality: number }): Promise<Uint8Array>;
 }
 
