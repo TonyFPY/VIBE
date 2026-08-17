@@ -1,26 +1,40 @@
 import { describe, expect, it } from "vitest";
 
-import { parseAgentAction } from "../../src/actions/contract";
+import { validateComputerAction } from "../../src/actions/policy";
 
-describe("restricted agent action contract", () => {
-  it("accepts exact CLICK, MOVE, and DONE actions", () => {
-    expect(parseAgentAction({ type: "CLICK", x: 756, y: 386, purpose: "response" })).toEqual({
-      valid: true,
-      action: { type: "CLICK", x: 756, y: 386, purpose: "response" },
-    });
-    expect(parseAgentAction({ type: "MOVE", x: 540, y: 338 })).toEqual({
-      valid: true,
-      action: { type: "MOVE", x: 540, y: 338 },
-    });
-    expect(parseAgentAction({ type: "DONE" })).toEqual({ valid: true, action: { type: "DONE" } });
+const viewport = { width: 1080, height: 675 } as const;
+
+describe("shared computer action contract", () => {
+  it("accepts the lowercase click, move, and bounded wait actions", () => {
+    expect(validateComputerAction({ type: "click", x: 0, y: 0 }, viewport)).toEqual({ valid: true });
+    expect(validateComputerAction({ type: "move", x: 1079, y: 674 }, viewport)).toEqual({ valid: true });
+    expect(validateComputerAction({ type: "wait", milliseconds: 5000 }, viewport)).toEqual({ valid: true });
   });
 
-  it("rejects arbitrary capabilities and silently repairable values", () => {
-    expect(parseAgentAction({ type: "MOVE", x: 20, y: 30, code: "page.evaluate" }).valid).toBe(false);
-    expect(parseAgentAction({ type: "CLICK", x: "20", y: 30, purpose: "response" }).valid).toBe(false);
-    expect(parseAgentAction({ type: "CLICK", x: -1, y: 30, purpose: "response" }).valid).toBe(false);
-    expect(parseAgentAction({ type: "CLICK", x: 20, y: 30, purpose: "solve-task" }).valid).toBe(false);
-    expect(parseAgentAction({ type: "DONE", privateAnswer: "SECRET" }).valid).toBe(false);
-    expect(parseAgentAction({ type: "EVALUATE", script: "document.body" }).valid).toBe(false);
+  it("rejects uppercase protocol actions and provider-specific fields", () => {
+    expect(validateComputerAction({ type: "DONE" }, viewport)).toMatchObject({ valid: false });
+    expect(validateComputerAction({ type: "CLICK", x: 1, y: 2, purpose: "response" }, viewport)).toMatchObject({ valid: false });
+    expect(validateComputerAction({ type: "click", x: 1, y: 2, purpose: "response" }, viewport)).toMatchObject({ valid: false });
+    expect(validateComputerAction({ type: "click", x: 1, y: 2, page: { evaluate: "document.body" } }, viewport)).toMatchObject({ valid: false });
+    expect(validateComputerAction({ type: "type", text: "secret" }, viewport)).toMatchObject({ valid: false });
+    expect(validateComputerAction({ type: "scroll", x: 1, y: 2 }, viewport)).toMatchObject({ valid: false });
+  });
+
+  it("rejects non-finite, negative, out-of-range, and extra values without replacements", () => {
+    const invalidActions: unknown[] = [
+      { type: "click", x: Number.NaN, y: 0 },
+      { type: "move", x: Number.POSITIVE_INFINITY, y: 0 },
+      { type: "click", x: -1, y: 0 },
+      { type: "click", x: 1080, y: 675 },
+      { type: "wait", milliseconds: -1 },
+      { type: "wait", milliseconds: 10001 },
+      { type: "wait", milliseconds: 5000, extra: "SECRET_ANSWER_CANARY" },
+    ];
+
+    for (const action of invalidActions) {
+      const result = validateComputerAction(action, viewport);
+      expect(result.valid).toBe(false);
+      expect(result).not.toHaveProperty("action");
+    }
   });
 });
