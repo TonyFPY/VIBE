@@ -81,7 +81,6 @@ function interaction(steps: unknown[], id: string, fields: Record<string, unknow
     id,
     status: "completed",
     steps,
-    responseBody: { privateAnswer: canary },
     ...fields,
   };
 }
@@ -147,14 +146,14 @@ class FakeGeminiTransport implements GeminiTransport {
   readonly requests: GeminiTransportRequest[] = [];
   private readonly responses: unknown[];
 
-  constructor(providerBodies: PrivateBoundaryFixture["providerBodies"]) {
+  constructor() {
     this.responses = [
       interaction([
         functionCall("click", { x: 250, y: 250, intent: "choose visible candidate" }, "call-1"),
-      ], "interaction-1", providerBodies),
+      ], "interaction-1"),
       interaction([
         functionCall("click", { x: 750, y: 500, intent: "submit visible choice" }, "call-2"),
-      ], "interaction-2", providerBodies),
+      ], "interaction-2"),
     ];
   }
 
@@ -214,39 +213,19 @@ class FakeEvaluatorSessionState implements BrowserHost {
   ) {}
 
   async openSession(url: string, _viewport: { width: 1080; height: 675 }): Promise<BrowserSession> {
-    this.evaluatorValues.push({
-      url,
-      privateTrial: this.fixture.privateTrial,
-      internalTaskRecord: this.fixture.internalTaskRecord,
-      pageLikeObject: this.fixture.pageLikeObject,
-    });
+    this.evaluatorValues.push(this.evaluatePrivateRenderState(url));
     return {
       screenshot: async () => {
-        this.evaluatorValues.push({
-          privateTrial: this.fixture.privateTrial,
-          internalTaskRecord: this.fixture.internalTaskRecord,
-          page: this.fixture.pageLikeObject,
-          pageUrl: this.fixture.pageLikeObject.url(),
-          pageText: this.fixture.pageLikeObject.evaluate(),
-        });
-        return screenshot;
+        return this.renderPublicScreenshot(url);
       },
       move: async () => undefined,
       click: async () => {
         this.clickCount += 1;
-        this.evaluatorValues.push({
-          privateTrial: this.fixture.privateTrial,
-          internalTaskRecord: this.fixture.internalTaskRecord,
-          page: this.fixture.pageLikeObject,
-          requestBody: this.fixture.backend.requestBody,
-          responseBody: this.fixture.backend.responseBody,
-        });
         if (this.clickCount === 2) {
-          this.emit({ type: "results-response", status: 202, ok: false });
+          this.emitPublicBackendEvent(this.evaluatePrivateBackendResponse());
         }
         if (this.clickCount === 4) {
-          this.evaluatorValues.push({ error: `backend request failed ${this.fixture.backend.url}` });
-          this.emit({ type: "results-request-failed", error: "backend request failed" });
+          this.emitPublicBackendEvent(this.evaluatePrivateBackendFailure());
         }
       },
       subscribeBackendEvents: (listener) => {
@@ -259,9 +238,81 @@ class FakeEvaluatorSessionState implements BrowserHost {
 
   async close(): Promise<void> {}
 
+  private evaluatePrivateRenderState(url: string): unknown {
+    return {
+      url,
+      privateTrial: this.fixture.privateTrial,
+      internalTaskRecord: this.fixture.internalTaskRecord,
+      pageLikeObject: this.fixture.pageLikeObject,
+    };
+  }
+
+  private renderPublicScreenshot(url: string): Uint8Array {
+    const rawRenderState = {
+      ...this.evaluatePrivateRenderState(url),
+      pageUrl: this.fixture.pageLikeObject.url(),
+      pageText: this.fixture.pageLikeObject.evaluate(),
+    };
+    this.evaluatorValues.push(rawRenderState);
+    return Uint8Array.from(screenshot);
+  }
+
+  private evaluatePrivateBackendResponse(): unknown {
+    const rawResponse = {
+      page: this.fixture.pageLikeObject,
+      url: this.fixture.backend.url,
+      requestBody: this.fixture.backend.requestBody,
+      responseBody: this.fixture.backend.responseBody,
+      status: 202,
+      ok: false,
+    };
+    this.evaluatorValues.push(rawResponse);
+    this.evaluatePrivateBackendFailure();
+    return rawResponse;
+  }
+
+  private evaluatePrivateBackendFailure(): unknown {
+    const rawFailure = {
+      page: this.fixture.pageLikeObject,
+      url: this.fixture.backend.url,
+      requestBody: this.fixture.backend.requestBody,
+      responseBody: this.fixture.backend.responseBody,
+      error: `backend request failed ${this.fixture.privateTrial.correctAnswer}`,
+    };
+    this.evaluatorValues.push(rawFailure);
+    return rawFailure;
+  }
+
+  private emitPublicBackendEvent(rawBackendResult: any): void {
+    const event: BackendEvent = "status" in rawBackendResult
+      ? { type: "results-response", status: rawBackendResult.status, ok: rawBackendResult.ok }
+      : { type: "results-request-failed", error: "backend request failed" };
+    this.emit(event);
+  }
+
   private emit(event: BackendEvent): void {
     this.recordDeliveredEvent(event);
     for (const listener of this.backendListeners) listener(event);
+  }
+}
+
+class RecordingRunLogger implements RunLoggerPort {
+  readonly events: unknown[] = [];
+
+  constructor(private readonly delegate: RunLoggerPort) {}
+
+  async log(event: Parameters<RunLoggerPort["log"]>[0]): Promise<void> {
+    assertNoStructuralBoundaryLeak("logger event before delegation", event);
+    this.events.push(event);
+    await this.delegate.log(event);
+  }
+
+  async writeScreenshot(screenshotId: string, bytes: Uint8Array): Promise<void> {
+    await this.delegate.writeScreenshot(screenshotId, bytes);
+  }
+
+  async close(): Promise<void> {
+    await this.delegate.close();
   }
 }
 
@@ -275,7 +326,7 @@ describe("screenshot-only observation boundary", () => {
 
   it("keeps private task data, page state, URLs, and bodies out of Gemini requests and persisted logs", async () => {
     logRoot = await mkdtemp(join(tmpdir(), "agent-harness-boundary-"));
-    const transport = new FakeGeminiTransport(privateFixture.providerBodies);
+    const transport = new FakeGeminiTransport();
     const agent = new RecordingAgent(new GeminiComputerUseAgent({
       apiKey: "test-key",
       model: "google/gemini-3.7-flash",
@@ -285,11 +336,12 @@ describe("screenshot-only observation boundary", () => {
       sleep: async () => undefined,
       random: () => 0,
     }));
-    const logger: RunLoggerPort = await RunLogger.open({
+    const realLogger: RunLoggerPort = await RunLogger.open({
       root: logRoot,
       runId: "boundary-run",
       sensitiveValues: [canary],
     });
+    const logger = new RecordingRunLogger(realLogger);
     const deliveredBackendEvents: BackendEvent[] = [];
     let openedUrl = "";
     const evaluator = new FakeEvaluatorSessionState(privateFixture, (event) => {
@@ -327,6 +379,7 @@ describe("screenshot-only observation boundary", () => {
     const providerRequests = transport.requests.map((request) => JSON.parse(JSON.stringify(request)));
 
     expect(JSON.stringify(evaluator.evaluatorValues)).toContain(canary);
+    expect(evaluator.evaluatorValues.length).toBeGreaterThanOrEqual(2);
     expect(agent.observations).toHaveLength(2);
     expect(providerRequests).toHaveLength(2);
     expect(providerRequests[0]).toMatchObject({
@@ -362,6 +415,8 @@ describe("screenshot-only observation boundary", () => {
     assertBoundaryValue("backend events", deliveredBackendEvents);
     assertNoStructuralBoundaryLeak("backend events", deliveredBackendEvents);
     assertBoundaryValue("persisted logs", persistedLog);
+    assertBoundaryValue("recorded logger events", logger.events);
+    assertNoStructuralBoundaryLeak("recorded logger events", logger.events);
     for (const event of persistedLog.trim().split("\n").map((line) => JSON.parse(line))) {
       assertNoStructuralBoundaryLeak("persisted log event", event);
     }

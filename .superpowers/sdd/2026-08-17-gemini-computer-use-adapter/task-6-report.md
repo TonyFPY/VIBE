@@ -156,6 +156,34 @@ Output:
 ```text
 ```
 
+## Fix Round 2
+
+### Review findings addressed
+
+- `FakeEvaluatorSessionState` now evaluates private render and backend state
+  from `privateTrial`, `internalTaskRecord`, `pageLikeObject`, and backend
+  fixture fields. It stores raw canary-bearing values, renders the public
+  screenshot from private state, and derives backend metadata in a separate
+  public boundary method before emitting it.
+- `RecordingRunLogger` recursively checks every event with
+  `assertNoStructuralBoundaryLeak` before delegating to `RunLogger`, while
+  retaining captured events and persisted-log assertions.
+
+### Verification
+
+Command:
+
+```bash
+npm --prefix agent_harness test -- tests/no-cheating/observation-boundary.test.ts tests/logging/run-logger.test.ts
+```
+
+Output:
+
+```text
+Test Files  2 passed (2)
+Tests       2 passed (2)
+```
+
 ### Staged files
 
 Command:
