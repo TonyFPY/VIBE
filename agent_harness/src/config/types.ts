@@ -19,7 +19,6 @@ export interface HarnessConfig {
   taskUrl: string;
   participantId: string;
   model: string;
-  location: string;
   runMode: HarnessRunMode;
   viewport: Viewport;
   screenshotQuality: number;
@@ -30,5 +29,5 @@ export interface HarnessConfig {
 
 export type HarnessConfigInput = Pick<
   HarnessConfig,
-  "taskUrl" | "participantId" | "model" | "location" | "runMode"
-> & Partial<Omit<HarnessConfig, "taskUrl" | "participantId" | "model" | "location" | "runMode">>;
+  "taskUrl" | "participantId" | "model" | "runMode"
+> & Partial<Omit<HarnessConfig, "taskUrl" | "participantId" | "model" | "runMode">>;

@@ -54,9 +54,7 @@ export function parseHarnessConfig(input: unknown): HarnessConfig {
   const participantId = requireString(input, "participantId");
   if (!/^\d{3,12}$/.test(participantId)) throw new Error("participantId must contain 3 to 12 digits without a prefix");
   const model = requireString(input, "model");
-  const location = requireString(input, "location");
-  const modelSpec = resolveModelSpec(model, location);
-  if (!modelSpec.supportsVision) throw new Error(`Model ${model} does not support vision`);
+  resolveModelSpec(model);
   const runMode = input.runMode;
   if (runMode !== "dev" && runMode !== "ops") throw new Error("runMode must be dev or ops");
 
@@ -74,11 +72,10 @@ export function parseHarnessConfig(input: unknown): HarnessConfig {
     taskUrl,
     participantId,
     model,
-    location,
     runMode,
     viewport: DEFAULT_VIEWPORT,
     screenshotQuality: boundedInteger(input.screenshotQuality, 90, "screenshotQuality", 80, 100),
-    maxSteps: boundedInteger(input.maxSteps, 100, "maxSteps", 1, 10_000),
+    maxSteps: boundedInteger(input.maxSteps, 256, "maxSteps", 1, 10_000),
     maxInvalidActions: boundedInteger(input.maxInvalidActions, 3, "maxInvalidActions", 0, 100),
     performance: {
       outputTokens: boundedInteger(performanceRecord.outputTokens, DEFAULT_OUTPUT_TOKENS, "outputTokens", 16, 4096),

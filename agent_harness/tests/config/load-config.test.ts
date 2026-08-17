@@ -5,15 +5,14 @@ import { buildTaskUrl, parseHarnessConfig } from "../../src/config/load-config";
 const minimumConfig = {
   taskUrl: "https://vibe-9d6e5.web.app/tasks/visual-similarity",
   participantId: "001",
-  model: "google/gemini-3.5-flash",
-  location: "global",
+  model: "google/gemini-3.7-flash",
   runMode: "dev",
 } as const;
 
 describe("harness configuration", () => {
   it("builds an encoded agent URL without leaking unrelated query fields", () => {
     expect(buildTaskUrl(minimumConfig)).toBe(
-      "https://vibe-9d6e5.web.app/tasks/visual-similarity?participant_id=A001&model=google%2Fgemini-3.5-flash&run=dev",
+      "https://vibe-9d6e5.web.app/tasks/visual-similarity?participant_id=A001&model=google%2Fgemini-3.7-flash&run=dev",
     );
   });
 
@@ -21,7 +20,7 @@ describe("harness configuration", () => {
     expect(parseHarnessConfig(minimumConfig)).toMatchObject({
       viewport: { width: 1080, height: 675 },
       screenshotQuality: 90,
-      maxSteps: 100,
+      maxSteps: 256,
       maxInvalidActions: 3,
       performance: {
         outputTokens: 2048,
@@ -43,8 +42,8 @@ describe("harness configuration", () => {
     expect(() => parseHarnessConfig({ ...minimumConfig, screenshotQuality: 101 })).toThrow("screenshotQuality");
   });
 
-  it("rejects unknown and text-only catalog models", () => {
+  it("rejects unknown models and ignores obsolete Vertex locations", () => {
     expect(() => parseHarnessConfig({ ...minimumConfig, model: "unknown/model" })).toThrow("model");
-    expect(() => parseHarnessConfig({ ...minimumConfig, model: "xai/grok-4-3" })).toThrow("vision");
+    expect(parseHarnessConfig({ ...minimumConfig, location: "global" })).not.toHaveProperty("location");
   });
 });
