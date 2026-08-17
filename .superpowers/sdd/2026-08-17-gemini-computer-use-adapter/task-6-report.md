@@ -184,6 +184,36 @@ Test Files  2 passed (2)
 Tests       2 passed (2)
 ```
 
+## Fix Round 3
+
+### Review findings addressed
+
+- Added explicit private render-state and raw backend-result interfaces,
+  removing the `unknown` spread and `any` backend reducer input.
+- Public screenshots are copied from a frame derived from private trial and
+  task-record state; backend status, success, and failure metadata are derived
+  from fixture-backed raw evaluator results. Unused provider-body fixture data
+  was removed.
+
+### Verification
+
+```bash
+npm --prefix agent_harness run typecheck
+```
+
+```text
+tsc --noEmit
+```
+
+```bash
+npm --prefix agent_harness test -- tests/no-cheating/observation-boundary.test.ts tests/logging/run-logger.test.ts
+```
+
+```text
+Test Files  2 passed (2)
+Tests       2 passed (2)
+```
+
 ### Staged files
 
 Command:

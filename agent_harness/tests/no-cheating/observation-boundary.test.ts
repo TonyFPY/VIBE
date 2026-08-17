@@ -16,8 +16,6 @@ import { RunLoop } from "../../src/core/run-loop";
 
 const canary = "SECRET_ANSWER_CANARY";
 const publicInstruction = "Choose using only the visible screen.";
-const screenshot = Uint8Array.from([0xff, 0xd8, 0xff]);
-
 const performance = {
   outputTokens: 128,
   connectTimeoutMs: 10_000,
@@ -42,12 +40,40 @@ interface PrivateBoundaryFixture {
     url: string;
     requestBody: { privateAnswer: string };
     responseBody: { privateAnswer: string };
-  };
-  providerBodies: {
-    requestBody: { privateAnswer: string };
-    responseBody: { privateAnswer: string };
+    responseStatus: number;
+    responseOk: boolean;
+    failureReason: string;
+    publicFailureReason: string;
   };
 }
+
+interface PrivateRenderState {
+  url: string;
+  privateTrial: PrivateBoundaryFixture["privateTrial"];
+  internalTaskRecord: PrivateBoundaryFixture["internalTaskRecord"];
+  pageLikeObject: PageLikeCanaryFixture;
+  publicFrame: Uint8Array;
+}
+
+interface RawBackendResponse {
+  page: PageLikeCanaryFixture;
+  url: string;
+  requestBody: { privateAnswer: string };
+  responseBody: { privateAnswer: string };
+  status: number;
+  ok: boolean;
+}
+
+interface RawBackendFailure {
+  page: PageLikeCanaryFixture;
+  url: string;
+  requestBody: { privateAnswer: string };
+  responseBody: { privateAnswer: string };
+  error: string;
+  publicError: string;
+}
+
+type RawBackendResult = RawBackendResponse | RawBackendFailure;
 
 function pageLikeCanaryFixture(): PageLikeCanaryFixture {
   const pageLikeObject = { body: { text: canary } } as PageLikeCanaryFixture;
@@ -69,10 +95,10 @@ const privateFixture = {
     url: `https://example.test/api/experiments/sessions?answer=${canary}`,
     requestBody: { privateAnswer: canary },
     responseBody: { privateAnswer: canary },
-  },
-  providerBodies: {
-    requestBody: { privateAnswer: canary },
-    responseBody: { privateAnswer: canary },
+    responseStatus: 202,
+    responseOk: false,
+    failureReason: `backend request failed ${canary}`,
+    publicFailureReason: "backend request failed",
   },
 } satisfies PrivateBoundaryFixture;
 
@@ -238,55 +264,59 @@ class FakeEvaluatorSessionState implements BrowserHost {
 
   async close(): Promise<void> {}
 
-  private evaluatePrivateRenderState(url: string): unknown {
+  private evaluatePrivateRenderState(url: string): PrivateRenderState {
     return {
       url,
       privateTrial: this.fixture.privateTrial,
       internalTaskRecord: this.fixture.internalTaskRecord,
       pageLikeObject: this.fixture.pageLikeObject,
+      publicFrame: Uint8Array.from([
+        0xff,
+        0xd8,
+        0xff,
+        this.fixture.privateTrial.correctAnswer.length,
+        this.fixture.internalTaskRecord.answerKey.length,
+      ]),
     };
   }
 
   private renderPublicScreenshot(url: string): Uint8Array {
-    const rawRenderState = {
-      ...this.evaluatePrivateRenderState(url),
-      pageUrl: this.fixture.pageLikeObject.url(),
-      pageText: this.fixture.pageLikeObject.evaluate(),
-    };
+    const rawRenderState = this.evaluatePrivateRenderState(url);
     this.evaluatorValues.push(rawRenderState);
-    return Uint8Array.from(screenshot);
+    return Uint8Array.from(rawRenderState.publicFrame);
   }
 
-  private evaluatePrivateBackendResponse(): unknown {
+  private evaluatePrivateBackendResponse(): RawBackendResponse {
     const rawResponse = {
       page: this.fixture.pageLikeObject,
       url: this.fixture.backend.url,
       requestBody: this.fixture.backend.requestBody,
       responseBody: this.fixture.backend.responseBody,
-      status: 202,
-      ok: false,
+      status: this.fixture.backend.responseStatus,
+      ok: this.fixture.backend.responseOk,
     };
     this.evaluatorValues.push(rawResponse);
     this.evaluatePrivateBackendFailure();
     return rawResponse;
   }
 
-  private evaluatePrivateBackendFailure(): unknown {
+  private evaluatePrivateBackendFailure(): RawBackendFailure {
     const rawFailure = {
       page: this.fixture.pageLikeObject,
       url: this.fixture.backend.url,
       requestBody: this.fixture.backend.requestBody,
       responseBody: this.fixture.backend.responseBody,
-      error: `backend request failed ${this.fixture.privateTrial.correctAnswer}`,
+      error: this.fixture.backend.failureReason,
+      publicError: this.fixture.backend.publicFailureReason,
     };
     this.evaluatorValues.push(rawFailure);
     return rawFailure;
   }
 
-  private emitPublicBackendEvent(rawBackendResult: any): void {
+  private emitPublicBackendEvent(rawBackendResult: RawBackendResult): void {
     const event: BackendEvent = "status" in rawBackendResult
       ? { type: "results-response", status: rawBackendResult.status, ok: rawBackendResult.ok }
-      : { type: "results-request-failed", error: "backend request failed" };
+      : { type: "results-request-failed", error: rawBackendResult.publicError };
     this.emit(event);
   }
 
@@ -385,7 +415,7 @@ describe("screenshot-only observation boundary", () => {
     expect(providerRequests[0]).toMatchObject({
       input: [
         { type: "text", text: publicInstruction },
-        { type: "image", data: "/9j/", mime_type: "image/jpeg" },
+        { type: "image", data: "/9j/FBQ=", mime_type: "image/jpeg" },
       ],
     });
     expect(providerRequests[1]).toMatchObject({
@@ -396,7 +426,7 @@ describe("screenshot-only observation boundary", () => {
         name: "click",
         result: [
           { type: "text", text: JSON.stringify({ status: "executed", error: undefined }) },
-          { type: "image", data: "/9j/", mime_type: "image/jpeg" },
+          { type: "image", data: "/9j/FBQ=", mime_type: "image/jpeg" },
         ],
       }],
     });
@@ -421,7 +451,7 @@ describe("screenshot-only observation boundary", () => {
       assertNoStructuralBoundaryLeak("persisted log event", event);
     }
     expect(JSON.parse(JSON.stringify(agent.observations[0]))).toEqual({
-      screenshot: { "0": 255, "1": 216, "2": 255 },
+      screenshot: { "0": 255, "1": 216, "2": 255, "3": 20, "4": 20 },
       mimeType: "image/jpeg",
       publicInstruction,
     });
