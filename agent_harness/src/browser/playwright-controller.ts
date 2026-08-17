@@ -9,6 +9,7 @@ import type {
 
 export interface PlaywrightBrowserHostOptions {
   launcher?: BrowserLauncherPort;
+  headless?: boolean;
   settleDelayMs: number;
   navigationTimeoutMs: number;
 }
@@ -76,7 +77,7 @@ export class PlaywrightBrowserHost implements BrowserHost {
   }
 
   private browser(): Promise<BrowserPort> {
-    this.browserPromise ??= (this.options.launcher ?? defaultLauncher).launch({ headless: true });
+    this.browserPromise ??= (this.options.launcher ?? defaultLauncher).launch({ headless: this.options.headless ?? true });
     return this.browserPromise;
   }
 }

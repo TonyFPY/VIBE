@@ -23,7 +23,7 @@ export interface BrowserPort {
 }
 
 export interface BrowserLauncherPort {
-  launch(options: { headless: true }): Promise<BrowserPort>;
+  launch(options: { headless: boolean }): Promise<BrowserPort>;
 }
 
 export interface BrowserSession {

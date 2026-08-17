@@ -44,6 +44,23 @@ function createFixture() {
 }
 
 describe("PlaywrightBrowserHost", () => {
+  it("defaults to headless and supports headed Chromium", async () => {
+    const headlessFixture = createFixture();
+    const headlessHost = new PlaywrightBrowserHost({ launcher: headlessFixture.launcher, settleDelayMs: 0, navigationTimeoutMs: 10_000 });
+    const headlessSession = await headlessHost.openSession("https://example.test/tasks/visual-similarity", { width: 1080, height: 675 });
+    await headlessSession.close();
+    await headlessHost.close();
+
+    const headedFixture = createFixture();
+    const headedHost = new PlaywrightBrowserHost({ launcher: headedFixture.launcher, headless: false, settleDelayMs: 0, navigationTimeoutMs: 10_000 });
+    const headedSession = await headedHost.openSession("https://example.test/tasks/visual-similarity", { width: 1080, height: 675 });
+    await headedSession.close();
+    await headedHost.close();
+
+    expect(headlessFixture.events).toContainEqual(["launch", { headless: true }]);
+    expect(headedFixture.events).toContainEqual(["launch", { headless: false }]);
+  });
+
   it("reuses Chromium while isolating each run in a scale-factor-one context", async () => {
     const fixture = createFixture();
     const host = new PlaywrightBrowserHost({ launcher: fixture.launcher, settleDelayMs: 0, navigationTimeoutMs: 10_000 });

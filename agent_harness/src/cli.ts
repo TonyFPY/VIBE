@@ -13,12 +13,19 @@ import { GoogleAgentPlatformAdapter } from "./providers/google-agent-platform";
 
 export interface CliArgs {
   configPath: string;
+  headed: boolean;
 }
 
 export function parseCliArgs(args: readonly string[]): CliArgs {
   let configPath: string | undefined;
+  let headed = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
+    if (argument === "--headed") {
+      if (headed) throw new Error("--headed may be supplied only once");
+      headed = true;
+      continue;
+    }
     if (argument !== "--config") throw new Error(`Unexpected argument: ${argument}`);
     if (configPath) throw new Error("--config may be supplied only once");
     const value = args[index + 1];
@@ -27,7 +34,7 @@ export function parseCliArgs(args: readonly string[]): CliArgs {
     index += 1;
   }
   if (!configPath) throw new Error("--config is required");
-  return { configPath };
+  return { configPath, headed };
 }
 
 function secretEnvironmentValues(environment: NodeJS.ProcessEnv): string[] {
@@ -40,7 +47,7 @@ export async function runCli(
   args: readonly string[] = process.argv.slice(2),
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<number> {
-  const { configPath } = parseCliArgs(args);
+  const { configPath, headed } = parseCliArgs(args);
   const rawConfig = JSON.parse(await readFile(resolve(configPath), "utf8"));
   const config = parseHarnessConfig(rawConfig);
   const project = environment.GOOGLE_CLOUD_PROJECT?.trim();
@@ -53,6 +60,7 @@ export async function runCli(
     sensitiveValues: secretEnvironmentValues(environment),
   });
   const browserHost = new PlaywrightBrowserHost({
+    headless: !headed,
     settleDelayMs: config.performance.settleDelayMs,
     navigationTimeoutMs: config.performance.connectTimeoutMs,
   });
