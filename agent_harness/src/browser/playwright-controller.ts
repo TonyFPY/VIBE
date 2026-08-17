@@ -70,7 +70,6 @@ function cursorVisibilityScript(visible: boolean): string {
 }
 
 const resultsPathname = "/api/experiments/sessions";
-const maxBackendErrorLength = 200;
 
 export class PlaywrightBrowserHost implements BrowserHost {
   private browserPromise?: Promise<BrowserPort>;
@@ -103,10 +102,9 @@ export class PlaywrightBrowserHost implements BrowserHost {
       };
       const requestFailedListener = (request: BrowserRequestFailurePort) => {
         if (!isResultsRequest(request)) return;
-        const error = request.failure()?.errorText || "Request failed";
         subscribers.forEach((listener) => listener({
           type: "results-request-failed",
-          error: error.slice(0, maxBackendErrorLength),
+          error: "result request failed",
         }));
       };
       page.on("response", responseListener);

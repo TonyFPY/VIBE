@@ -144,13 +144,15 @@ describe("PlaywrightBrowserHost", () => {
     fixture.emitRequestFailed({
       method: () => "POST",
       url: () => "https://example.test/api/experiments/sessions",
-      failure: () => ({ errorText: "SECRET_RESPONSE_BODY_OR_HEADERS" }),
+      failure: () => ({ errorText: "https://evil.test/?body=SECRET_RESPONSE_BODY_OR_HEADERS" }),
     });
 
     expect(received).toEqual([
       { type: "results-response", status: 200, ok: true },
-      { type: "results-request-failed", error: "SECRET_RESPONSE_BODY_OR_HEADERS" },
+      { type: "results-request-failed", error: "result request failed" },
     ]);
+    expect(JSON.stringify(received)).not.toContain("evil.test");
+    expect(JSON.stringify(received)).not.toContain("SECRET_RESPONSE_BODY_OR_HEADERS");
     await session.close();
     expect(fixture.events.filter((event) => Array.isArray(event) && event[0] === "off")).toEqual([
       ["off", "response"],
