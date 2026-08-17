@@ -30,6 +30,14 @@ interface PendingFunctionCall {
   name: string;
 }
 
+interface NativeInteraction {
+  id: string;
+  steps: unknown[];
+  status?: string;
+  error?: unknown;
+  errors?: unknown;
+}
+
 export interface GeminiComputerUseAgentOptions {
   apiKey: string;
   model: string;
@@ -83,9 +91,19 @@ function requiresSafetyConfirmation(value: unknown): boolean {
     && (decision === "requires_confirmation" || decision === "blocked" || decision === "prompt_blocked" || !decision);
 }
 
-function interactionParts(response: unknown): { id: string; steps: unknown[] } | undefined {
+function interactionParts(response: unknown): NativeInteraction | undefined {
   if (!isRecord(response) || typeof response.id !== "string" || !Array.isArray(response.steps)) return undefined;
-  return { id: response.id, steps: response.steps };
+  return {
+    id: response.id,
+    steps: response.steps,
+    status: typeof response.status === "string" ? response.status : undefined,
+    error: response.error,
+    errors: response.errors,
+  };
+}
+
+function hasProviderError(response: unknown): boolean {
+  return isRecord(response) && (response.error !== undefined || response.errors !== undefined);
 }
 
 function blocked(rawProviderOutput: unknown, failureReason: string): AgentTurn {
@@ -168,6 +186,9 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
   }
 
   async next(observation: AgentObservation, signal: AbortSignal): Promise<AgentTurn> {
+    if (this.pendingCall) {
+      return blocked(undefined, "Gemini function call result must be reported before the next observation");
+    }
     return this.invokeAndInterpret({
       model: this.apiModelId(),
       input: [
@@ -233,13 +254,23 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
   }
 
   private interpret(response: unknown, rawProviderOutput: unknown): AgentTurn {
+    if (hasProviderError(response)) {
+      return blocked(rawProviderOutput, "Gemini interaction returned a provider error");
+    }
     const interaction = interactionParts(response);
     if (!interaction) return blocked(rawProviderOutput, "Malformed Gemini interaction response");
+    if (!interaction.status) return blocked(rawProviderOutput, "Gemini interaction did not include a status");
+    if (interaction.status === "failed" || interaction.status === "cancelled" || interaction.status === "incomplete") {
+      return blocked(rawProviderOutput, `Gemini interaction ${interaction.status}`);
+    }
     if (interaction.steps.some(requiresSafetyConfirmation)) {
       return blocked(rawProviderOutput, "Gemini safety confirmation is required");
     }
     const functionCallSteps = interaction.steps.filter((step) => isRecord(step) && step.type === "function_call");
     if (functionCallSteps.length === 0) {
+      if (interaction.status !== "completed") {
+        return blocked(rawProviderOutput, `Gemini interaction ended without an action (${interaction.status})`);
+      }
       this.previousInteractionId = interaction.id;
       return { status: "finished", actions: [], rawProviderOutput };
     }

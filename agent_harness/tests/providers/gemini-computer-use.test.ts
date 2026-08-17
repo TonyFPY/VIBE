@@ -20,8 +20,8 @@ const performance = {
   maxProviderRetries: 2,
 };
 
-function interaction(steps: unknown[], id = "interaction-1"): unknown {
-  return { id, steps };
+function interaction(steps: unknown[], id = "interaction-1", fields: Record<string, unknown> = {}): unknown {
+  return { id, steps, status: "completed", ...fields };
 }
 
 function functionCall(name: string, arguments_: unknown, id = "call-1"): unknown {
@@ -99,7 +99,7 @@ describe("GeminiComputerUseAgent", () => {
     expect(serialized).not.toContain("DOM");
   });
 
-  it("maps one move and one bounded wait function call", async () => {
+  it("maps one move and blocks a new observation until its result is reported", async () => {
     const transport = fakeTransport(
       interaction([functionCall("move", { x: 999, y: 0 })]),
       interaction([functionCall("wait", { seconds: 12 })], "interaction-2"),
@@ -111,6 +111,17 @@ describe("GeminiComputerUseAgent", () => {
       actions: [{ type: "move", x: 1078, y: 0 }],
     });
     await expect(computerUseAgent.next(observation, new AbortController().signal)).resolves.toMatchObject({
+      status: "blocked",
+      actions: [],
+    });
+    expect(transport.requests).toHaveLength(1);
+  });
+
+  it("maps one bounded wait function call", async () => {
+    await expect(agent(fakeTransport(interaction([functionCall("wait", { seconds: 12 })]))).next(
+      observation,
+      new AbortController().signal,
+    )).resolves.toMatchObject({
       status: "actions",
       actions: [{ type: "wait", milliseconds: 5000 }],
     });
@@ -132,11 +143,36 @@ describe("GeminiComputerUseAgent", () => {
     expect(turn.actions).toEqual([]);
   });
 
-  it("finishes without action for text-only native responses", async () => {
+  it("finishes only for a completed text-only native response", async () => {
     await expect(agent(fakeTransport(interaction([{ type: "text", text: "I am finished." }]))).next(
       observation,
       new AbortController().signal,
     )).resolves.toMatchObject({ status: "finished", actions: [] });
+  });
+
+  it.each([
+    ["missing status", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: undefined }), "status"],
+    ["failed", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "failed" }), "failed"],
+    ["cancelled", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "cancelled" }), "cancelled"],
+    ["incomplete", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "incomplete" }), "incomplete"],
+    ["top-level error", { error: { message: "provider error" } }, "provider error"],
+    [
+      "interaction error",
+      interaction([{ type: "text", text: "terminal" }], "interaction-1", { error: { message: "provider error" } }),
+      "provider error",
+    ],
+    [
+      "interaction errors",
+      interaction([{ type: "text", text: "terminal" }], "interaction-1", { errors: [{ message: "provider error" }] }),
+      "provider error",
+    ],
+  ])("blocks a %s no-action interaction instead of treating it as finished", async (_name, response, failureReason) => {
+    const turn = await agent(fakeTransport(response)).next(
+      observation,
+      new AbortController().signal,
+    );
+    expect(turn).toMatchObject({ status: "blocked", actions: [] });
+    expect(turn.failureReason).toContain(failureReason);
   });
 
   it.each([
