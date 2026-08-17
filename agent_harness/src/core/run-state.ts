@@ -1,6 +1,11 @@
 import type { TimingSummary } from "../metrics/timing";
 
-export type RunStatus = "completed" | "incomplete" | "failed";
+export type RunStatus =
+  | "completed"
+  | "failed"
+  | "incomplete"
+  | "timeout"
+  | "step_limit";
 
 export interface RunTimingSummary {
   navigation: TimingSummary;
