@@ -44,6 +44,8 @@ test("embeds escaped data and comparison controls in standalone HTML", async () 
   assert.match(html, /id="agent-panel"/);
   assert.match(html, /trajectory-svg/);
   assert.match(html, /participant type/i);
+  assert.equal(html.includes("human correct / RT"), false);
+  assert.match(html, /originX/);
   assert.equal(html.includes("</script><script>alert"), false);
   assert.equal(html.includes("fetch("), false);
   assert.match(html, /dev_human_001/);

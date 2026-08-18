@@ -212,36 +212,61 @@ export function buildViewerHtml(snapshot) {
   const fmt = (value, suffix) => value === null ? "—" : value.toFixed(value % 1 ? 1 : 0) + (suffix || "");
   const points = (trajectory) => (trajectory && Array.isArray(trajectory.points) ? trajectory.points : []).map((point) => Array.isArray(point) ? { elapsedMs: point[0], xPx: point[1], yPx: point[2] } : point).filter((point) => number(point.xPx) !== null && number(point.yPx) !== null);
   const color = (type) => type === "human" ? "#277c63" : "#a45726";
-  function responseSvg(rows, maxX, maxY) {
-    const width = 560, height = 190, pad = 24;
+  const relativeResponse = (row) => {
+    if (number(row.responseX) === null || number(row.responseY) === null) return null;
+    const viewport = row.viewport || {};
+    const centerX = number(viewport.width) === null ? 540 : viewport.width / 2;
+    const centerY = number(viewport.height) === null ? 337.5 : viewport.height / 2;
+    return { x: row.responseX - centerX, y: row.responseY - centerY };
+  };
+  function coordinateExtent(rows, trajectories) {
+    const coordinates = rows.map(relativeResponse).filter(Boolean);
+    trajectories.forEach((trajectory) => points(trajectory).forEach((point) => coordinates.push({ x: point.xPx, y: point.yPx })));
+    return {
+      x: Math.max(540, ...coordinates.map((point) => Math.abs(point.x))),
+      y: Math.max(337.5, ...coordinates.map((point) => Math.abs(point.y))),
+    };
+  }
+  function responseSvg(rows, extentX, extentY) {
+    const width = 560, height = 240, pad = 24;
+    const originX = width / 2, originY = height / 2;
+    const scaleX = (value) => originX + value / extentX * (width / 2 - pad);
+    const scaleY = (value) => originY + value / extentY * (height / 2 - pad);
     const marks = rows.filter((row) => number(row.responseX) !== null && number(row.responseY) !== null).map((row) => {
-      const x = pad + row.responseX / maxX * (width - pad * 2);
-      const y = pad + row.responseY / maxY * (height - pad * 2);
+      const relative = relativeResponse(row);
+      const x = scaleX(relative.x);
+      const y = scaleY(relative.y);
       return '<circle cx="' + x.toFixed(2) + '" cy="' + y.toFixed(2) + '" r="5" fill="' + color(byId.get(row.sessionId)?.participantType) + '"><title>Trial ' + esc(row.trialId) + '</title></circle>';
     }).join("");
-    return '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Response coordinates"><path d="M' + pad + ' ' + pad + 'V' + (height - pad) + 'H' + (width - pad) + '" fill="none" stroke="#c8d2ca"/><text x="' + pad + '" y="' + (height - 5) + '" fill="#627067" font-size="11">0</text><text x="' + (width - pad) + '" y="' + (height - 5) + '" text-anchor="end" fill="#627067" font-size="11">' + maxX + ' px</text>' + marks + '</svg>';
+    return '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Response coordinates centered at 0,0"><path d="M' + originX + ' ' + pad + 'V' + (height - pad) + 'M' + pad + ' ' + originY + 'H' + (width - pad) + '" fill="none" stroke="#c8d2ca"/><text x="' + (originX + 4) + '" y="' + (originY - 4) + '" fill="#627067" font-size="11">0,0</text><text x="' + pad + '" y="' + (height - 5) + '" fill="#627067" font-size="11">-' + extentX.toFixed(0) + '</text><text x="' + (width - pad) + '" y="' + (height - 5) + '" text-anchor="end" fill="#627067" font-size="11">+' + extentX.toFixed(0) + ' px</text>' + marks + '</svg>';
   }
-  function trajectorySvg(rows, maxX, maxY) {
+  function trajectorySvg(rows, extentX, extentY) {
     const width = 560, height = 240, pad = 18;
+    const originX = width / 2, originY = height / 2;
+    const scaleX = (value) => originX + value / extentX * (width / 2 - pad);
+    const scaleY = (value) => originY + value / extentY * (height / 2 - pad);
     const paths = rows.map((trajectory) => {
       const raw = points(trajectory); if (!raw.length) return "";
-      const coords = raw.map((point) => [(pad + point.xPx / maxX * (width - pad * 2)).toFixed(2), (pad + point.yPx / maxY * (height - pad * 2)).toFixed(2)]);
+      const coords = raw.map((point) => [scaleX(point.xPx).toFixed(2), scaleY(point.yPx).toFixed(2)]);
       const d = coords.map((coord, index) => (index ? "L" : "M") + coord[0] + " " + coord[1]).join(" ");
       const start = coords[0], end = coords[coords.length - 1];
       const type = byId.get(trajectory.sessionId)?.participantType;
       return '<path d="' + d + '" fill="none" stroke="' + color(type) + '" stroke-width="2" opacity=".82"/><circle cx="' + start[0] + '" cy="' + start[1] + '" r="4" fill="' + color(type) + '"/><path d="M' + (Number(end[0]) - 5) + ' ' + (Number(end[1]) - 5) + 'L' + (Number(end[0]) + 5) + ' ' + (Number(end[1]) + 5) + 'M' + (Number(end[0]) + 5) + ' ' + (Number(end[1]) - 5) + 'L' + (Number(end[0]) - 5) + ' ' + (Number(end[1]) + 5) + '" stroke="' + color(type) + '" stroke-width="2"/>';
     }).join("");
-    return '<svg class="trajectory-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Raw pointer trajectories"><path d="M' + pad + ' ' + pad + 'V' + (height - pad) + 'H' + (width - pad) + '" fill="none" stroke="#c8d2ca"/>' + paths + '</svg>';
+    return '<svg class="trajectory-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Raw pointer trajectories centered at 0,0"><path d="M' + originX + ' ' + pad + 'V' + (height - pad) + 'M' + pad + ' ' + originY + 'H' + (width - pad) + '" fill="none" stroke="#c8d2ca"/><circle cx="' + originX + '" cy="' + originY + '" r="3" fill="#627067"/><text x="' + (originX + 5) + '" y="' + (originY - 5) + '" fill="#627067" font-size="11">0,0</text>' + paths + '</svg>';
   }
   function panel(session, task, selectedTrial, label) {
     if (!session) return '<section class="panel unpaired"><h2>' + label + '</h2><div class="empty">Unpaired — no matching session</div></section>';
     const rows = responseRows(session.sessionId, task).filter((row) => selectedTrial === "all" || row.trialId === selectedTrial);
     const trajectories = trajectoryRows(session.sessionId, task).filter((row) => selectedTrial === "all" || row.trialId === selectedTrial);
     const acc = accuracy(rows), rt = mean(rows, "reactionTimeMs");
-    const maxX = Math.max(1080, ...rows.map((row) => number(row.responseX) || 0));
-    const maxY = Math.max(675, ...rows.map((row) => number(row.responseY) || 0));
-    const table = rows.map((row) => '<tr><td>' + esc(row.trialId) + '</td><td>' + (typeof row.correct === "boolean" ? (row.correct ? "correct" : "incorrect") : "—") + '</td><td>' + fmt(number(row.reactionTimeMs), " ms") + '</td><td>' + (number(row.responseX) === null ? "—" : number(row.responseX) + ", " + number(row.responseY)) + '</td></tr>').join("");
-    return '<section class="panel ' + session.participantType + '" id="' + session.participantType + '-panel"><h2>' + label + '</h2><div class="subtle">' + esc(session.sessionId) + '<br>model: ' + esc(session.model) + ' · run: ' + esc(session.runMode) + '</div><div class="meta"><div class="metric"><b>' + fmt(acc === null ? null : acc * 100, "%") + '</b><span>accuracy</span></div><div class="metric"><b>' + fmt(rt, " ms") + '</b><span>mean reaction time</span></div><div class="metric"><b>' + rows.length + '</b><span>responses</span></div></div><div class="chart"><div class="subtle">Response coordinates</div>' + responseSvg(rows, maxX, maxY) + '</div><div class="chart"><div class="subtle">Raw trajectories · start dot, end X</div>' + trajectorySvg(trajectories, maxX, maxY) + '</div><div class="table-wrap"><table><thead><tr><th>trial</th><th>correct</th><th>reaction</th><th>x, y</th></tr></thead><tbody>' + (table || '<tr><td colspan="4">No matching response</td></tr>') + '</tbody></table></div></section>';
+    const extent = coordinateExtent(rows, trajectories);
+    const table = rows.map((row) => {
+      const relative = relativeResponse(row);
+      const coordinates = relative ? relative.x + ", " + relative.y : "—";
+      return '<tr><td>' + esc(row.trialId) + '</td><td>' + (typeof row.correct === "boolean" ? (row.correct ? "correct" : "incorrect") : "—") + '</td><td>' + fmt(number(row.reactionTimeMs), " ms") + '</td><td>' + coordinates + '</td></tr>';
+    }).join("");
+    return '<section class="panel ' + session.participantType + '" id="' + session.participantType + '-panel"><h2>' + label + '</h2><div class="subtle">' + esc(session.sessionId) + '<br>model: ' + esc(session.model) + ' · run: ' + esc(session.runMode) + '</div><div class="meta"><div class="metric"><b>' + fmt(acc === null ? null : acc * 100, "%") + '</b><span>accuracy</span></div><div class="metric"><b>' + fmt(rt, " ms") + '</b><span>mean reaction time</span></div><div class="metric"><b>' + rows.length + '</b><span>responses</span></div></div><div class="chart"><div class="subtle">Response coordinates relative to center (0,0)</div>' + responseSvg(rows, extent.x, extent.y) + '</div><div class="chart"><div class="subtle">Raw trajectories relative to center (0,0) · start dot, end X</div>' + trajectorySvg(trajectories, extent.x, extent.y) + '</div><div class="table-wrap"><table><thead><tr><th>trial</th><th>correct</th><th>reaction</th><th>relative x, y</th></tr></thead><tbody>' + (table || '<tr><td colspan="4">No matching response</td></tr>') + '</tbody></table></div></section>';
   }
   function render() {
     const task = $("task-filter").value;
@@ -258,17 +283,7 @@ export function buildViewerHtml(snapshot) {
     const html = [];
     if (participant !== "agent") html.push(panel(pair.human, task, selectedTrial, "Human"));
     if (participant !== "human") html.push(panel(pair.agent, task, selectedTrial, "Agent"));
-    $("comparison").innerHTML = '<div class="legend"><span><i class="dot" style="background:#277c63"></i>human</span><span><i class="dot" style="background:#a45726"></i>agent</span></div><div class="compare">' + html.join("") + '</div><div class="table-wrap"><table><thead><tr><th>trial</th><th>human correct / RT</th><th>agent correct / RT</th></tr></thead><tbody>' + comparisonRows(pair, task, selectedTrial) + '</tbody></table></div>';
-  }
-  function comparisonRows(pair, task, selectedTrial) {
-    const humanRows = pair.human ? responseRows(pair.human.sessionId, task) : [];
-    const agentRows = pair.agent ? responseRows(pair.agent.sessionId, task) : [];
-    const ids = [...new Set([...humanRows, ...agentRows].map((row) => row.trialId))].filter((id) => selectedTrial === "all" || id === selectedTrial).sort();
-    return ids.map((id) => {
-      const human = humanRows.find((row) => row.trialId === id), agent = agentRows.find((row) => row.trialId === id);
-      const cell = (row) => row ? (typeof row.correct === "boolean" ? (row.correct ? "correct" : "incorrect") : "—") + " / " + fmt(number(row.reactionTimeMs), " ms") : "—";
-      return '<tr><td>' + esc(id) + '</td><td>' + cell(human) + '</td><td>' + cell(agent) + '</td></tr>';
-    }).join("") || '<tr><td colspan="3">No paired trials</td></tr>';
+    $("comparison").innerHTML = '<div class="legend"><span><i class="dot" style="background:#277c63"></i>human</span><span><i class="dot" style="background:#a45726"></i>agent</span></div><div class="compare">' + html.join("") + '</div>';
   }
   function refreshOptions() {
     const task = $("task-filter").value;
