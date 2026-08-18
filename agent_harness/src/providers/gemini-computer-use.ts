@@ -5,26 +5,74 @@ import type { ComputerUseAgent } from "./computer-use-agent";
 import { DefaultGeminiTransport, GeminiHttpError, type GeminiTransport, type GeminiTransportRequest } from "./gemini-transport";
 
 const EXCLUDED_PREDEFINED_FUNCTIONS = [
-  "double_click", "triple_click", "middle_click", "right_click", "mouse_down", "mouse_up",
+  "click", "move", "double_click", "triple_click", "middle_click", "right_click", "mouse_down", "mouse_up",
   "type", "drag_and_drop", "press_key", "key_down", "key_up", "hotkey", "take_screenshot",
   "scroll", "go_back", "navigate", "go_forward", "wait",
 ] as const;
 
-const COMPUTER_USE_TOOLS = [{
+const COMPUTER_USE_TOOL = {
   type: "computer_use",
   environment: "browser",
   enable_prompt_injection_detection: true,
   excluded_predefined_functions: EXCLUDED_PREDEFINED_FUNCTIONS,
-}] as const;
+} as const;
+
+const CUSTOM_POINTER_TOOLS = [
+  {
+    type: "function",
+    name: "click_visible",
+    description: "Click one visible setup or navigation target.",
+    parameters: {
+      type: "object",
+      properties: {
+        x: { type: "integer" },
+        y: { type: "integer" },
+        intent: { type: "string" },
+      },
+      required: ["x", "y", "intent"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "submit_trial_actions",
+    description: "Submit nine through forty-nine visible pointer moves followed by one final visible click.",
+    parameters: {
+      type: "object",
+      properties: {
+        moves: {
+          type: "array",
+          minItems: 9,
+          maxItems: 49,
+          items: {
+            type: "object",
+            properties: { x: { type: "integer" }, y: { type: "integer" } },
+            required: ["x", "y"],
+            additionalProperties: false,
+          },
+        },
+        click: {
+          type: "object",
+          properties: { x: { type: "integer" }, y: { type: "integer" } },
+          required: ["x", "y"],
+          additionalProperties: false,
+        },
+      },
+      required: ["moves", "click"],
+      additionalProperties: false,
+    },
+  },
+] as const;
+
+const COMPUTER_USE_TOOLS = [COMPUTER_USE_TOOL, ...CUSTOM_POINTER_TOOLS] as const;
 
 const TRANSIENT_HTTP_STATUSES = new Set([429, 500, 502, 503, 504]);
 const VIEWPORT: Viewport = { width: 1080, height: 675 };
 const PUBLIC_INTERACTION_POLICY = [
   "Public harness interaction policy:",
-  "Click Start without padding during setup.",
-  "After the task starts, emit at least nine separate moves followed by one final click per trial.",
-  "Use at most 50 actions.",
-  "Use no waits or other excluded controls.",
+  "Use click_visible for one visible setup or navigation click.",
+  "After the task starts, use submit_trial_actions with at least nine separate moves followed by one final click.",
+  "Use no native pointer controls, waits, or other excluded controls.",
   "The harness remains authoritative if you violate this policy.",
 ].join(" ");
 
@@ -37,6 +85,7 @@ interface NativeFunctionCall {
 interface PendingFunctionCall {
   id: string;
   name: string;
+  actionCount: number;
 }
 
 interface NativeInteraction {
@@ -129,9 +178,12 @@ export function normalizeGeminiCoordinate(value: number, axis: "x" | "y", viewpo
 function normalizedPointerAction(
   type: "click" | "move",
   arguments_: Record<string, unknown>,
+  requiresIntent = false,
 ): ComputerAction | undefined {
-  if (!hasOnlyKeys(arguments_, ["x", "y", "intent"])) return undefined;
+  const allowedKeys = requiresIntent ? ["x", "y", "intent"] : ["x", "y"];
+  if (!hasOnlyKeys(arguments_, allowedKeys)) return undefined;
   if (!hasFiniteNumber(arguments_, "x") || !hasFiniteNumber(arguments_, "y")) return undefined;
+  if (requiresIntent && typeof arguments_.intent !== "string") return undefined;
   try {
     return {
       type,
@@ -143,17 +195,20 @@ function normalizedPointerAction(
   }
 }
 
-function parseComputerAction(call: NativeFunctionCall): { action: ComputerAction; intent?: string } | undefined {
-  const intent = typeof call.arguments.intent === "string" ? call.arguments.intent : undefined;
-  if (call.name === "click" || call.name === "click_at") {
-    const action = normalizedPointerAction("click", call.arguments);
-    return action ? { action, intent } : undefined;
+function parseComputerAction(call: NativeFunctionCall): { actions: ComputerAction[]; intent?: string } | undefined {
+  if (call.name === "click_visible") {
+    const action = normalizedPointerAction("click", call.arguments, true);
+    return action ? { actions: [action], intent: call.arguments.intent as string } : undefined;
   }
-  if (call.name === "move" || call.name === "hover_at") {
-    const action = normalizedPointerAction("move", call.arguments);
-    return action ? { action, intent } : undefined;
-  }
-  return undefined;
+  if (call.name !== "submit_trial_actions" || !hasOnlyKeys(call.arguments, ["moves", "click"])) return undefined;
+  if (!Array.isArray(call.arguments.moves) || !isRecord(call.arguments.click)) return undefined;
+  if (call.arguments.moves.length < 9 || call.arguments.moves.length > 49) return undefined;
+  const moves = call.arguments.moves.map((move) => (
+    isRecord(move) ? normalizedPointerAction("move", move) : undefined
+  ));
+  const click = normalizedPointerAction("click", call.arguments.click);
+  if (moves.some((move) => !move) || !click) return undefined;
+  return { actions: [...moves as ComputerAction[], click] };
 }
 
 function isTransientHttpFailure(error: unknown): boolean {
@@ -201,25 +256,31 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     if (this.pendingCalls.length === 0 || !this.previousInteractionId) {
       return blocked(undefined, "No Gemini function call is awaiting a result");
     }
-    if (results.length !== this.pendingCalls.length) {
+    const pendingActionCount = this.pendingCalls.reduce((total, pendingCall) => total + pendingCall.actionCount, 0);
+    if (results.length !== pendingActionCount) {
       return blocked(undefined, "Gemini function call result count does not match the pending batch");
     }
     const pendingCalls = this.pendingCalls;
     this.pendingCalls = [];
+    let actionIndex = 0;
     return this.invokeAndInterpret({
       model: this.apiModelId(),
       previous_interaction_id: this.previousInteractionId,
-      input: pendingCalls.map((pendingCall, index) => ({
-        type: "function_result",
-        call_id: pendingCall.id,
-        name: pendingCall.name,
-        result: [
-          { type: "text", text: JSON.stringify({ status: results[index].status, error: results[index].error }) },
-          ...(index === pendingCalls.length - 1
-            ? [{ type: "image", data: toBase64(observation.screenshot), mime_type: observation.mimeType }]
-            : []),
-        ],
-      })),
+      input: pendingCalls.map((pendingCall, index) => {
+        const callResults = results.slice(actionIndex, actionIndex + pendingCall.actionCount);
+        actionIndex += pendingCall.actionCount;
+        return {
+          type: "function_result",
+          call_id: pendingCall.id,
+          name: pendingCall.name,
+          result: [
+            { type: "text", text: JSON.stringify(callResults.map(({ status, error }) => ({ status, error }))) },
+            ...(index === pendingCalls.length - 1
+              ? [{ type: "image", data: toBase64(observation.screenshot), mime_type: observation.mimeType }]
+              : []),
+          ],
+        };
+      }),
       tools: COMPUTER_USE_TOOLS,
     }, signal);
   }
@@ -277,9 +338,6 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
       this.previousInteractionId = interaction.id;
       return { status: "finished", actions: [], rawProviderOutput };
     }
-    if (functionCallSteps.length > MAX_BATCH_ACTIONS) {
-      return blocked(rawProviderOutput, `Gemini returned more than ${MAX_BATCH_ACTIONS} function calls`);
-    }
     const calls: NativeFunctionCall[] = [];
     for (const step of functionCallSteps) {
       const call = nativeFunctionCall(step);
@@ -290,20 +348,18 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     if (parsed.some((action) => !action)) {
       return blocked(rawProviderOutput, "Gemini returned an unsupported or malformed function call");
     }
-    const actions = parsed as { action: ComputerAction; intent?: string }[];
-    if (actions.slice(0, -1).some(({ action }) => action.type !== "move")) {
-      return blocked(rawProviderOutput, "Gemini function calls before the final call must be moves");
-    }
-    if (actions.at(-1)?.action.type !== "click") {
-      return blocked(rawProviderOutput, "Gemini final function call must be a click");
+    const parsedCalls = parsed as { actions: ComputerAction[]; intent?: string }[];
+    const actions = parsedCalls.flatMap(({ actions: callActions }) => callActions);
+    if (actions.length > MAX_BATCH_ACTIONS) {
+      return blocked(rawProviderOutput, `Gemini returned more than ${MAX_BATCH_ACTIONS} actions`);
     }
     this.previousInteractionId = interaction.id;
-    this.pendingCalls = calls.map(({ id, name }) => ({ id, name }));
+    this.pendingCalls = calls.map(({ id, name }, index) => ({ id, name, actionCount: parsedCalls[index].actions.length }));
     return {
       status: "actions",
-      actions: actions.map(({ action }) => action),
+      actions,
       rawProviderOutput,
-      providerIntent: actions[0].intent,
+      providerIntent: parsedCalls[0].intent,
     };
   }
 }
