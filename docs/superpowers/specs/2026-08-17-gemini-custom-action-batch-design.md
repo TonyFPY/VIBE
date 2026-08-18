@@ -10,7 +10,8 @@ calls to arrive as one complete trial batch: native Computer Use may return one
 intermediate action at a time.
 
 The request advertises a custom `click_visible` function for setup/navigation
-clicks and a custom `submit_trial_actions` function for trial responses. The
+clicks, including Start and Continue pages, and a custom
+`submit_trial_actions` function for trial responses. The
 trial function has separate `moves` and final `click` fields, so its shape
 cannot express a click before the path. The harness still validates every
 coordinate and action count before Playwright executes anything. The setup
@@ -37,8 +38,10 @@ submit_trial_actions({
 
 `moves` contains 9 through 49 entries. Together with `click`, a trial batch
 contains 10 through 50 executable actions. The click is always the final
-action. Unsupported native pointer functions, waits, navigation, keyboard,
-scrolling, dragging, and model-requested screenshots remain excluded.
+action. The runtime totals and derived move limits are defined in
+`agent_harness/src/actions/policy.ts`. Unsupported native pointer functions,
+waits, native navigation, keyboard, scrolling, dragging, and model-requested
+screenshots remain excluded.
 
 The adapter flattens one custom trial call into the existing ordered
 `AgentTurn.actions` list. Pending provider calls record how many executable
@@ -48,11 +51,11 @@ function result per provider call.
 ## Lifecycle
 
 ```text
-instructions screenshot
-  ↓ Gemini click_visible
-execute setup click
+instructions or Continue screenshot
+  ↓ Gemini click_visible (navigation batch)
+execute one navigation click
   ↓ controller-owned fixation + trial screenshot
-Gemini submit_trial_actions
+Gemini submit_trial_actions (trial batch)
   ↓ execute all moves and final click without intermediate screenshots
 if incomplete: controller-owned fixation + next trial screenshot
 if saved: stop

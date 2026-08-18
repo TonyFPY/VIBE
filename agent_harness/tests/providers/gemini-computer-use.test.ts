@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ActionResult, AgentObservation } from "../../src/actions/contract";
+import { MAX_TRIAL_MOVES, MIN_TRIAL_MOVES } from "../../src/actions/policy";
 import { GeminiComputerUseAgent, normalizeGeminiCoordinate } from "../../src/providers/gemini-computer-use";
 import type { GeminiTransport } from "../../src/providers/gemini-transport";
 
@@ -91,7 +92,12 @@ describe("GeminiComputerUseAgent", () => {
         expect.objectContaining({
           type: "function",
           name: "submit_trial_actions",
-          parameters: expect.objectContaining({ required: ["moves", "click"] }),
+          parameters: expect.objectContaining({
+            required: ["moves", "click"],
+            properties: expect.objectContaining({
+              moves: expect.objectContaining({ minItems: MIN_TRIAL_MOVES, maxItems: MAX_TRIAL_MOVES }),
+            }),
+          }),
         }),
       ]),
     })]);
@@ -117,6 +123,7 @@ describe("GeminiComputerUseAgent", () => {
       { type: "text", text: expect.stringContaining("PUBLIC_INSTRUCTION_CANARY") },
       { type: "image", data: "/9j/", mime_type: "image/jpeg" },
     ]);
+    expect((request.input[0] as { text: string }).text).toContain("Start or Continue");
     expect(request.tools[0]).toEqual({
       type: "computer_use",
       environment: "browser",
@@ -143,6 +150,7 @@ describe("GeminiComputerUseAgent", () => {
       functionCall("click_visible", { x: 700, y: 500, intent: "choose the visible candidate" }),
     ]))).next(observation, new AbortController().signal)).resolves.toMatchObject({
       status: "actions",
+      actionBatchType: "navigation",
       actions: [{ type: "click", x: 756, y: 337 }],
       providerIntent: "choose the visible candidate",
     });
@@ -182,6 +190,7 @@ describe("GeminiComputerUseAgent", () => {
 
     expect(turn).toMatchObject({
       status: "actions",
+      actionBatchType: "trial",
       actions: [
         { type: "move", x: 0, y: 0 },
         { type: "move", x: 108, y: 67 },

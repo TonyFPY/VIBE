@@ -12,7 +12,8 @@ functions whose coordinate arguments are validated and executed by Playwright.
 
 The custom functions are:
 
-- `click_visible({ x, y, intent })` for one visible setup or navigation click.
+- `click_visible({ x, y, intent })` for one visible setup or navigation click,
+  including Start and Continue pages.
 - `submit_trial_actions({ moves, click })` for one trial-response batch. The
   `moves` array contains 9 through 49 normalized pointer coordinates, and the
   separate `click` coordinate is always flattened as the final action.
@@ -26,15 +27,20 @@ submit_trial_actions(moves{9,49}, click)
 The adapter flattens each custom function call into shared pointer actions.
 Trial-response batches therefore contain at least 10 actions: at least nine
 separate `move` actions followed by one final `click`. The total flattened
-batch length is capped at 50 actions. The setup action uses `click_visible` and
-must contain exactly that one click. Native pointer calls, `wait`, navigation,
-keyboard, scrolling, dragging, and any second click are rejected for this
-condition. The final click is the trial response.
+batch length is capped at 50 actions. The setup/navigation action uses
+`click_visible` and must contain exactly that one click. Native pointer calls,
+`wait`, native navigation, keyboard, scrolling, dragging, and any second click
+are rejected for this condition. The final click is the trial response.
 
 The custom function coordinates are integer values in the inclusive `0..999`
 normalized range. The adapter maps them to the fixed `1080 x 675` CSS viewport
 with `Math.floor(x / 1000 * 1080)` and `Math.floor(y / 1000 * 675)`; malformed,
 fractional, or out-of-range values are rejected rather than repaired.
+
+The total trial action budget is defined in `agent_harness/src/actions/policy.ts`
+by `MIN_TRIAL_BATCH_ACTIONS` and `MAX_BATCH_ACTIONS`. The Gemini schema and
+parser derive the move bounds as one fewer than those totals; change those two
+constants when adjusting the 10–50 budget. Navigation remains one click.
 
 This uses Gemini's documented function-calling and interaction-continuation
 mechanism. The adapter keeps one provider function call as the unit of
@@ -91,10 +97,11 @@ reportActionResults(
 ): Promise<AgentTurn>;
 ```
 
-`AgentTurn.actions` already carries an ordered action list. The run loop adds a
-phase-aware batch validator. For the setup batch it requires exactly one final
-`click` action, which is the flattened `click_visible` setup call. For each
-CSS-pixel coordinate it applies the existing finite, in-viewport policy.
+`AgentTurn.actions` already carries an ordered action list. Each provider marks
+an action turn as `navigation` or `trial`. The run loop validates navigation
+turns as exactly one final `click`, even after trial responses, so Continue is
+handled like Start. For each CSS-pixel coordinate it applies the existing
+finite, in-viewport policy.
 
 For each trial-response batch it applies the same checks but requires at least
 10 actions. Validation covers the entire batch before any browser action
@@ -114,9 +121,9 @@ calls, unsupported calls, malformed coordinates, malformed batch fields, and
 flattened batches over 50 actions.
 
 The initial text input includes a provider interaction policy telling Gemini
-to use `click_visible` for the visible Start/setup target, then use
+to use `click_visible` for a visible Start or Continue target, then use
 `submit_trial_actions` with at least nine separate moves and one final click
-for each trial response. The task instruction remains the participant-visible
+on trial-response screens. The task instruction remains the participant-visible
 task goal. The policy guides the model; the harness enforces the phase-specific
 minimum and maximum.
 
@@ -162,8 +169,8 @@ Add or update tests for:
 - `move* → click` shape and invalid sequence rejection;
 - one continuation request containing one result per call and one screenshot;
 - batch execution order with no intermediate screenshots;
-- initial instruction screenshot, Start action, center fixation, next trial
-  screenshot, and saving-page/backend completion ordering;
+- initial instruction screenshot, Start action, Continue navigation, center
+  fixation, next trial screenshot, and saving-page/backend completion ordering;
 - `mouseMoveSteps: 1` configuration and browser forwarding;
 - no-cheating assertions for every function result, screenshot, action result,
   and logger event.

@@ -172,7 +172,10 @@ export class RunLoop {
         }
 
         const validationStartedAt = this.nowMs();
-        const actionValidation = validateComputerActionBatch(turn.actions, config.viewport, phase);
+        const validationPhase = turn.actionBatchType === "navigation"
+          ? "setup"
+          : phase;
+        const actionValidation = validateComputerActionBatch(turn.actions, config.viewport, validationPhase);
         timing.parseAndValidate.observe(this.nowMs() - validationStartedAt);
         if (!actionValidation.valid) {
           summary.invalidActionCount += 1;

@@ -1,5 +1,5 @@
-import type { ActionResult, AgentObservation, AgentTurn, ComputerAction } from "../actions/contract";
-import { MAX_BATCH_ACTIONS } from "../actions/policy";
+import type { ActionResult, AgentActionBatchType, AgentObservation, AgentTurn, ComputerAction } from "../actions/contract";
+import { MAX_BATCH_ACTIONS, MAX_TRIAL_MOVES, MIN_TRIAL_MOVES } from "../actions/policy";
 import type { PerformanceConfig, Viewport } from "../config/types";
 import type { ComputerUseAgent } from "./computer-use-agent";
 import { DefaultGeminiTransport, GeminiHttpError, type GeminiTransport, type GeminiTransportRequest } from "./gemini-transport";
@@ -36,14 +36,14 @@ const CUSTOM_POINTER_TOOLS = [
   {
     type: "function",
     name: "submit_trial_actions",
-    description: "Submit nine through forty-nine visible pointer moves followed by one final visible click.",
+    description: `Submit ${MIN_TRIAL_MOVES} through ${MAX_TRIAL_MOVES} visible pointer moves followed by one final visible click.`,
     parameters: {
       type: "object",
       properties: {
         moves: {
           type: "array",
-          minItems: 9,
-          maxItems: 49,
+          minItems: MIN_TRIAL_MOVES,
+          maxItems: MAX_TRIAL_MOVES,
           items: {
             type: "object",
             properties: { x: { type: "integer" }, y: { type: "integer" } },
@@ -70,8 +70,8 @@ const TRANSIENT_HTTP_STATUSES = new Set([429, 500, 502, 503, 504]);
 const VIEWPORT: Viewport = { width: 1080, height: 675 };
 const PUBLIC_INTERACTION_POLICY = [
   "Public harness interaction policy:",
-  "Use click_visible for one visible setup or navigation click.",
-  "After the task starts, use submit_trial_actions with at least nine separate moves followed by one final click.",
+  "Use click_visible for one visible setup or navigation click, including Start or Continue.",
+  `On trial-response screens, use submit_trial_actions with at least ${MIN_TRIAL_MOVES} separate moves followed by one final click.`,
   "Use no native pointer controls, waits, or other excluded controls.",
   "The harness remains authoritative if you violate this policy.",
 ].join(" ");
@@ -199,20 +199,26 @@ function normalizedPointerAction(
   }
 }
 
-function parseComputerAction(call: NativeFunctionCall): { actions: ComputerAction[]; intent?: string } | undefined {
+function parseComputerAction(call: NativeFunctionCall): {
+  actions: ComputerAction[];
+  actionBatchType: AgentActionBatchType;
+  intent?: string;
+} | undefined {
   if (call.name === "click_visible") {
     const action = normalizedPointerAction("click", call.arguments, true);
-    return action ? { actions: [action], intent: call.arguments.intent as string } : undefined;
+    return action
+      ? { actions: [action], actionBatchType: "navigation", intent: call.arguments.intent as string }
+      : undefined;
   }
   if (call.name !== "submit_trial_actions" || !hasOnlyKeys(call.arguments, ["moves", "click"])) return undefined;
   if (!Array.isArray(call.arguments.moves) || !isRecord(call.arguments.click)) return undefined;
-  if (call.arguments.moves.length < 9 || call.arguments.moves.length > 49) return undefined;
+  if (call.arguments.moves.length < MIN_TRIAL_MOVES || call.arguments.moves.length > MAX_TRIAL_MOVES) return undefined;
   const moves = call.arguments.moves.map((move) => (
     isRecord(move) ? normalizedPointerAction("move", move) : undefined
   ));
   const click = normalizedPointerAction("click", call.arguments.click);
   if (moves.some((move) => !move) || !click) return undefined;
-  return { actions: [...moves as ComputerAction[], click] };
+  return { actions: [...moves as ComputerAction[], click], actionBatchType: "trial" };
 }
 
 function isTransientHttpFailure(error: unknown): boolean {
@@ -352,17 +358,23 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     if (parsed.some((action) => !action)) {
       return blocked(rawProviderOutput, "Gemini returned an unsupported or malformed function call");
     }
-    const parsedCalls = parsed as { actions: ComputerAction[]; intent?: string }[];
+    const parsedCalls = parsed as { actions: ComputerAction[]; actionBatchType: AgentActionBatchType; intent?: string }[];
     const actions = parsedCalls.flatMap(({ actions: callActions }) => callActions);
     if (actions.length > MAX_BATCH_ACTIONS) {
       return blocked(rawProviderOutput, `Gemini returned more than ${MAX_BATCH_ACTIONS} actions`);
     }
     this.previousInteractionId = interaction.id;
     this.pendingCalls = calls.map(({ id, name }, index) => ({ id, name, actionCount: parsedCalls[index].actions.length }));
+    const actionBatchType = parsedCalls.every(({ actionBatchType }) => actionBatchType === "navigation")
+      ? "navigation"
+      : parsedCalls.every(({ actionBatchType }) => actionBatchType === "trial")
+        ? "trial"
+        : undefined;
     return {
       status: "actions",
       actions,
       rawProviderOutput,
+      ...(actionBatchType ? { actionBatchType } : {}),
       providerIntent: parsedCalls[0].intent,
     };
   }

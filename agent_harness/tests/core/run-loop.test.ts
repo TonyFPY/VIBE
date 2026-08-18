@@ -42,6 +42,10 @@ function trialBatch(clickX = 756, clickY = 386): AgentTurn {
   ]);
 }
 
+function navigationBatch(x = 200, y = 200): AgentTurn {
+  return { ...actionTurn([{ type: "click", x, y }]), actionBatchType: "navigation" };
+}
+
 function createFixture(
   turns: readonly AgentTurn[],
   options: {
@@ -207,6 +211,23 @@ describe("trial-boundary computer-use run loop", () => {
     });
     expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults"]);
     expect(run.browserActions.at(-1)).toEqual(["click", 756, 386]);
+  });
+
+  it("accepts a single navigation click for Continue after trial batches", async () => {
+    const run = createFixture([setupBatch(), trialBatch(), navigationBatch(), trialBatch(700, 300)], {
+      onSession: (session) => {
+        const originalClick = session.click;
+        session.click = async (x, y) => {
+          await originalClick(x, y);
+          if (x === 700 && y === 300) session.emitBackendEvent({ type: "results-response", status: 201, ok: true });
+        };
+      },
+    });
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "completed", actionCount: 22, invalidActionCount: 0,
+    });
+    expect(run.browserActions).toContainEqual(["click", 200, 200]);
   });
 
   it("reports each action in a short trial batch as rejected without changing the screenshot and then retries", async () => {

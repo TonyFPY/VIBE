@@ -15,10 +15,13 @@ export interface ActionResult {
   error?: string;
 }
 
+export type AgentActionBatchType = "navigation" | "trial";
+
 export interface AgentTurn {
   status: "actions" | "finished" | "blocked";
   actions: readonly ComputerAction[];
   rawProviderOutput: unknown;
+  actionBatchType?: AgentActionBatchType;
   providerIntent?: string;
   failureReason?: string;
 }

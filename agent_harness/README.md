@@ -99,7 +99,8 @@ adapter retains the screenshot-oriented `computer_use` browser context but
 excludes its native pointer and browser-control functions. It exposes two
 client-executed custom functions instead:
 
-- `click_visible({ x, y, intent })` for one visible setup or navigation click.
+- `click_visible({ x, y, intent })` for one visible setup or navigation click,
+  including Start and Continue pages.
 - `submit_trial_actions({ moves, click })` for a trial-response batch. `moves`
   contains 9 through 49 normalized pointer coordinates, and `click` is the
   one final normalized click coordinate.
@@ -118,10 +119,12 @@ one fresh screenshot, and sends the per-action results back as one grouped
 function result per pending custom call. The fresh screenshot is attached only
 to the final grouped result. This is the provider-specific request/response
 mechanism; the provider-neutral `ComputerUseAgent` interface still exposes
-only screenshot observations and coordinate actions.
+only screenshot observations, a navigation/trial batch kind, and coordinate
+actions. Navigation batches are validated as one click even after trial
+responses, so Continue pages follow the same rule as Start.
 
-The setup phase accepts exactly one action: the `click_visible` click. Pointer
-movement uses non-interpolated Playwright steps by default. Set
+The setup/navigation phase accepts exactly one action: the `click_visible` click.
+Pointer movement uses non-interpolated Playwright steps by default. Set
 `mouseMoveSteps` at the top level of the JSON configuration to choose a value
 from `1` through `100`:
 
@@ -130,6 +133,12 @@ from `1` through `100`:
   "mouseMoveSteps": 1
 }
 ```
+
+The trial action budget is defined in `src/actions/policy.ts`:
+`MIN_TRIAL_BATCH_ACTIONS` is `10` and `MAX_BATCH_ACTIONS` is `50`. The Gemini
+schema and parser derive the move limits (`9` through `49`) from those totals.
+Change those two policy constants to adjust the total trial budget; the
+navigation click remains exactly one action.
 
 Completion is evaluator-owned. The provider can stop producing actions, but a
 run is successful only after the browser controller observes a successful

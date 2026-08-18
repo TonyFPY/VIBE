@@ -2,8 +2,12 @@ export type ComputerActionValidation = { valid: true } | { valid: false; error: 
 
 export type ActionBatchPhase = "setup" | "trial";
 
+// Adjust these two totals to change the trial action budget. The Gemini
+// custom-function move bounds derive from them below.
 export const MAX_BATCH_ACTIONS = 50;
 export const MIN_TRIAL_BATCH_ACTIONS = 10;
+export const MIN_TRIAL_MOVES = MIN_TRIAL_BATCH_ACTIONS - 1;
+export const MAX_TRIAL_MOVES = MAX_BATCH_ACTIONS - 1;
 
 interface Viewport {
   width: number;
