@@ -451,6 +451,11 @@ describe("screenshot-only observation boundary", () => {
       }],
     });
     expect(providerRequests[1].input).toHaveLength(1);
+    const serializedContinuationTools = JSON.stringify(providerRequests[1].tools);
+    expect(serializedContinuationTools).toContain('"name":"click_visible"');
+    expect(serializedContinuationTools).toContain('"name":"submit_trial_actions"');
+    expect(serializedContinuationTools).not.toContain('"name":"click"');
+    expect(serializedContinuationTools).not.toContain('"name":"move"');
     const continuationResults = providerRequests[1].input as Array<{
       call_id: string;
       result: Array<{ type: string; data?: string; mime_type?: string }>;
