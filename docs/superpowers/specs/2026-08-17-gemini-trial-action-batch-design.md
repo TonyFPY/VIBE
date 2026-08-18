@@ -1,27 +1,45 @@
-# Gemini trial-level action batches
+# Gemini trial-level custom action batches
 
 **Status:** Draft for review
 
 ## Decision
 
 The agent loop will operate at the experiment-trial boundary. Gemini receives
-one screenshot at the beginning of an interaction and may return an ordered
-batch of native Computer Use function calls. The harness executes the whole
-batch before capturing the next screenshot.
+one screenshot at the beginning of an interaction. Its screenshot-oriented
+Computer Use browser context is retained, but native pointer and browser
+control functions are excluded. The adapter exposes client-executed custom
+functions whose coordinate arguments are validated and executed by Playwright.
 
-The accepted batch grammar is:
+The custom functions are:
+
+- `click_visible({ x, y, intent })` for one visible setup or navigation click.
+- `submit_trial_actions({ moves, click })` for one trial-response batch. The
+  `moves` array contains 9 through 49 normalized pointer coordinates, and the
+  separate `click` coordinate is always flattened as the final action.
+
+The accepted trial-response batch grammar is:
 
 ```text
-move* click
+submit_trial_actions(moves{9,49}, click)
 ```
 
-There is no forced minimum length: a model may emit only a click, or several
-moves followed by a click. The total batch length is capped at 50 actions.
-`wait`, navigation, keyboard, scrolling, dragging, and any second click are
-invalid for this condition. The final click is the trial response.
+The adapter flattens each custom function call into shared pointer actions.
+Trial-response batches therefore contain at least 10 actions: at least nine
+separate `move` actions followed by one final `click`. The total flattened
+batch length is capped at 50 actions. The setup action uses `click_visible` and
+is exempt from the trial minimum. Native pointer calls, `wait`, navigation,
+keyboard, scrolling, dragging, and any second click are rejected for this
+condition. The final click is the trial response.
 
-This follows Gemini's documented Interactions API pattern for multiple
-function calls and one function result per executed call:
+The custom function coordinates are integer values in the inclusive `0..999`
+normalized range. The adapter maps them to the fixed `1080 x 675` CSS viewport
+with `Math.floor(x / 1000 * 1080)` and `Math.floor(y / 1000 * 675)`; malformed,
+fractional, or out-of-range values are rejected rather than repaired.
+
+This uses Gemini's documented function-calling and interaction-continuation
+mechanism. The adapter keeps one provider function call as the unit of
+continuation, while the client expands its custom trial call into the ordered
+browser actions that Playwright executes:
 
 - https://ai.google.dev/gemini-api/docs/computer-use
 - https://ai.google.dev/gemini-api/docs/function-calling
@@ -31,14 +49,17 @@ function calls and one function result per executed call:
 ```text
 instructions page
   ↓ screenshot
-Gemini emits Start batch
-  ↓ execute batch
+Gemini calls click_visible
+  ↓ Playwright executes one setup click
+settleDelayMs: 2000
+  ↓ deployed stimuli prepare before fixation
 controller-owned center fixation
   ↓ screenshot
-Gemini emits trial batch (move* → click)
-  ↓ execute all actions without an intermediate screenshot
+Gemini calls submit_trial_actions
+  ↓ Playwright executes 9–49 moves → click
 website records the final click and trial ends
-  ↓ if not complete: center fixation → next screenshot
+  ↓ grouped continuation results + one fresh screenshot
+if not complete: center fixation → next screenshot
 website saving/completed state
 ```
 
@@ -47,9 +68,10 @@ the Start button through the DOM or task metadata. The center fixation remains
 controller-owned, is not reported as a model action, and uses the same browser
 mouse policy as other pointer movement. The first screenshot is taken on the
 instructions page before any fixation. After a batch's final click, the run
-waits for the configured settle delay and checks evaluator-owned backend
-completion before beginning another fixation. A successful result save ends
-the run without another Gemini request.
+waits for the configured settle delay, allowing deployed stimuli to prepare,
+then checks evaluator-owned backend completion before beginning another
+fixation. The repository run example uses `settleDelayMs: 2000`. A successful
+result save ends the run without another Gemini request.
 
 The harness does not receive a privileged trial ID or trial state. A trial
 boundary is represented by the model batch's final click and the next public
@@ -70,29 +92,36 @@ reportActionResults(
 ```
 
 `AgentTurn.actions` already carries an ordered action list. The run loop adds a
-batch validator that checks:
+phase-aware batch validator. For the setup batch it checks:
 
 1. one through 50 actions;
 2. every action before the last is `move`;
 3. the last action is `click`;
 4. each CSS-pixel coordinate passes the existing finite, in-viewport policy.
 
-Validation covers the entire batch before any browser action executes. A
-malformed batch is rejected as a unit and never partially applied.
+For each trial-response batch it applies the same checks but requires at least
+10 actions. Validation covers the entire batch before any browser action
+executes. A malformed batch is rejected as a unit and never partially
+applied. A short trial-response batch is reported as rejected with the
+unchanged screenshot so Gemini can retry; it does not consume a trial or
+execute any pointer action.
 
 ## Gemini adapter
 
 The adapter parses all ordered `function_call` steps in the interaction. It
-accepts only modern `move` and `click` calls for the batch, retains every call
-ID/name, and returns the normalized shared actions in the same order. It
-rejects unsupported calls, malformed calls, multiple clicks, clicks before the
-last action, and batches over 50.
+accepts only `click_visible` and `submit_trial_actions` custom calls, retains
+each provider call ID/name, and returns the normalized shared actions in the
+same order. `click_visible` expands to one click; `submit_trial_actions`
+expands to its moves followed by its final click. It rejects native pointer
+calls, unsupported calls, malformed coordinates, malformed batch fields, and
+flattened batches over 50 actions.
 
 The initial text input includes a provider interaction policy telling Gemini
-to use an ordered path of separate `move` calls followed by a final `click`,
-without padding a batch. The task instruction remains the participant-visible
-task goal. The policy guides the model but does not force a minimum number of
-moves.
+to use `click_visible` for the visible Start/setup target, then use
+`submit_trial_actions` with at least nine separate moves and one final click
+for each trial response. The task instruction remains the participant-visible
+task goal. The policy guides the model; the harness enforces the phase-specific
+minimum and maximum.
 
 After execution, the continuation request contains one `function_result` for
 each pending call in original order. Each result includes only the public
@@ -129,9 +158,11 @@ trajectory remains authoritative for behavioral analysis.
 
 Add or update tests for:
 
-- native multi-call parsing in order, including 50-action acceptance and
-  51-action rejection;
-- `move* → click` acceptance and invalid sequence rejection;
+- custom setup/trial function parsing in order, including 50-action acceptance
+  and 51-action rejection;
+- setup-batch acceptance without a minimum and trial-batch enforcement of the
+  10-action minimum;
+- `move* → click` shape and invalid sequence rejection;
 - one continuation request containing one result per call and one screenshot;
 - batch execution order with no intermediate screenshots;
 - initial instruction screenshot, Start action, center fixation, next trial
