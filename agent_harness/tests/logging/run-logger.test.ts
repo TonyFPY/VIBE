@@ -23,13 +23,16 @@ describe("RunLogger", () => {
       at: "2026-08-16T20:00:00.000Z",
       authorization: "Bearer token-value",
       accessToken: "token-value",
-      rawOutput: '{"type":"DONE"}',
+      rawOutput: {
+        id: "interaction-001",
+        steps: [{ type: "function_call", id: "call-001", name: "click", arguments: { x: 700, y: 500 } }],
+      },
     });
     await logger.writeScreenshot("shot-001", Uint8Array.from([0xff, 0xd8, 0xff]));
     await logger.close();
 
     const eventText = await readFile(join(root, "run-001", "events.jsonl"), "utf8");
-    expect(eventText).toContain('"rawOutput":"{\\"type\\":\\"DONE\\"}"');
+    expect(eventText).toContain('"rawOutput":{"id":"interaction-001","steps":[{"type":"function_call"');
     expect(eventText).not.toContain("token-value");
     expect(eventText).toContain('"authorization":"[REDACTED]"');
     await expect(readFile(join(root, "run-001", "screenshots", "shot-001.jpg"))).resolves.toEqual(Buffer.from([0xff, 0xd8, 0xff]));

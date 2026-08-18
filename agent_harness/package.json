@@ -6,7 +6,7 @@
     "start": "tsx src/cli.ts",
     "test": "vitest run",
     "test:integration": "RUN_PLAYWRIGHT_INTEGRATION=1 vitest run tests/integration",
-    "test:live": "RUN_GOOGLE_SMOKE=1 vitest run --config vitest.live.config.ts",
+    "test:live": "RUN_GEMINI_SMOKE=1 vitest run --config vitest.live.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@google/genai": "2.17.1",
-    "google-auth-library": "11.0.2",
     "playwright": "1.62.1"
   },
   "devDependencies": {

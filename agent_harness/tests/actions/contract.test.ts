@@ -11,9 +11,9 @@ describe("shared computer action contract", () => {
     expect(validateComputerAction({ type: "wait", milliseconds: 5000 }, viewport)).toEqual({ valid: true });
   });
 
-  it("rejects uppercase protocol actions and provider-specific fields", () => {
-    expect(validateComputerAction({ type: "DONE" }, viewport)).toMatchObject({ valid: false });
-    expect(validateComputerAction({ type: "CLICK", x: 1, y: 2, purpose: "response" }, viewport)).toMatchObject({ valid: false });
+  it("rejects unsupported actions and provider-specific fields", () => {
+    expect(validateComputerAction({ type: "finish" }, viewport)).toMatchObject({ valid: false });
+    expect(validateComputerAction({ type: "tap", x: 1, y: 2, purpose: "response" }, viewport)).toMatchObject({ valid: false });
     expect(validateComputerAction({ type: "click", x: 1, y: 2, purpose: "response" }, viewport)).toMatchObject({ valid: false });
     expect(validateComputerAction({ type: "click", x: 1, y: 2, page: { evaluate: "document.body" } }, viewport)).toMatchObject({ valid: false });
     expect(validateComputerAction({ type: "type", text: "secret" }, viewport)).toMatchObject({ valid: false });
