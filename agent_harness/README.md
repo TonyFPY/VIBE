@@ -3,9 +3,9 @@
 The agent harness is a command-line runner for the existing visual behavior
 website. It opens the same public task URL a human participant uses, captures
 the fixed browser viewport as JPEG, sends that screenshot to Gemini native
-Computer Use, executes one validated pointer or wait action through Playwright,
-and repeats until the website reports completion or the runner reaches a
-terminal state.
+Computer Use, executes ordered setup/trial pointer batches through Playwright
+(no model waits), and repeats until the website reports completion or the
+runner reaches a terminal state.
 
 The Firebase website remains the owner of trial generation, rendering,
 response records, scoring, trajectory capture, and result persistence. The
@@ -84,10 +84,11 @@ other browser operations outside the shared action set.
 
 The first screenshot is captured on the instructions page, before the setup
 Start batch. Each Gemini interaction returns one ordered setup or trial-response
-batch. The harness executes every action in the batch and reports one result per
-action. It then settles, checks completion, performs controller-owned center
-fixation when applicable, and captures the next screenshot for the following
-interaction. No intermediate screenshots are captured within a batch.
+batch. The harness executes the batch, settles and checks completion, performs
+controller-owned center fixation if the experiment is still active, captures
+the next screenshot, and sends the ordered per-action results together with
+that screenshot in the continuation. No intermediate screenshots are captured
+within a batch.
 
 Trial-response batches require at least nine pointer moves followed by a final
 click; the Start batch is exempt from this minimum. Pointer movement uses
