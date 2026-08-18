@@ -82,17 +82,16 @@ for a browser environment. The tool configuration excludes navigation, typing,
 scrolling, dragging, keyboard input, screenshots requested by the model, and
 other browser operations outside the shared action set.
 
-The run loop executes at most one provider function call per turn. After an
-action executes, the next Gemini request is a native function result containing
-the action status plus a fresh screenshot. Multiple function calls in one turn
-are rejected so separate experiment states are not collapsed into one model
-step.
+The first screenshot is captured on the instructions page, before the setup
+Start batch. Each Gemini interaction returns one ordered setup or trial-response
+batch. The harness executes every action in the batch and reports one result per
+action. It then settles, checks completion, performs controller-owned center
+fixation when applicable, and captures the next screenshot for the following
+interaction. No intermediate screenshots are captured within a batch.
 
-One Gemini interaction returns either a setup batch or a trial-response batch.
 Trial-response batches require at least nine pointer moves followed by a final
-click; the Start batch is exempt from this minimum. Screenshots are captured
-only at batch boundaries, after the complete batch has executed. Pointer
-movement uses non-interpolated Playwright steps by default. Set
+click; the Start batch is exempt from this minimum. Pointer movement uses
+non-interpolated Playwright steps by default. Set
 `mouseMoveSteps` at the top level of the JSON configuration to choose a value
 from `1` through `100`:
 
