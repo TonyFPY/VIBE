@@ -1,0 +1,35 @@
+{
+  "sessionId": "dev_agent_001_20260818T000000Z_a1b2c3d4",
+  "session": {
+    "sessionId": "dev_agent_001_20260818T000000Z_a1b2c3d4",
+    "participantId": "001",
+    "participantType": "agent",
+    "model": "gpt-5.6-luna",
+    "runMode": "dev",
+    "savedAt": "2026-08-18T00:00:00.000Z"
+  },
+  "results": [
+    {
+      "id": "0-26",
+      "data": {
+        "task": "visual_similarity",
+        "trialId": "26",
+        "correct": true,
+        "reactionTimeMs": 1200
+      }
+    }
+  ],
+  "trajectories": [
+    {
+      "id": "0-26",
+      "data": {
+        "task": "visual_similarity",
+        "trialId": "26",
+        "points": [
+          { "elapsedMs": 0, "xPx": 540, "yPx": 337.5 },
+          { "elapsedMs": 1200, "xPx": 220, "yPx": 337.5 }
+        ]
+      }
+    }
+  ]
+}
