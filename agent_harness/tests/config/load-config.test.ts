@@ -21,6 +21,7 @@ describe("harness configuration", () => {
     expect(parseHarnessConfig(minimumConfig)).toMatchObject({
       viewport: { width: 1080, height: 675 },
       screenshotQuality: 90,
+      mouseMoveSteps: 1,
       maxSteps: 256,
       maxInvalidActions: 3,
       performance: {
@@ -33,6 +34,12 @@ describe("harness configuration", () => {
         maxProviderRetries: 2,
       },
     });
+  });
+
+  it("accepts bounded mouse movement steps", () => {
+    expect(parseHarnessConfig({ ...minimumConfig, mouseMoveSteps: 37 }).mouseMoveSteps).toBe(37);
+    expect(() => parseHarnessConfig({ ...minimumConfig, mouseMoveSteps: 0 })).toThrow("mouseMoveSteps");
+    expect(() => parseHarnessConfig({ ...minimumConfig, mouseMoveSteps: 101 })).toThrow("mouseMoveSteps");
   });
 
   it("accepts the catalogued Gemini computer-use model", () => {

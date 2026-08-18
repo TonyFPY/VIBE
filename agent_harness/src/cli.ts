@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { PlaywrightBrowserHost } from "./browser/playwright-controller";
+import { PlaywrightBrowserHost, type PlaywrightBrowserHostOptions } from "./browser/playwright-controller";
 import { parseHarnessConfig } from "./config/load-config";
 import { resolveModelSpec } from "./config/model-catalog";
 import type { HarnessConfig } from "./config/types";
@@ -21,6 +21,21 @@ export interface CliArgs {
 export type GeminiComputerUseAgentFactory = (
   options: GeminiComputerUseAgentOptions,
 ) => ComputerUseAgent;
+
+export type PlaywrightBrowserHostFactory = (options: PlaywrightBrowserHostOptions) => PlaywrightBrowserHost;
+
+export function createPlaywrightBrowserHost(
+  config: HarnessConfig,
+  headed: boolean,
+  createHost: PlaywrightBrowserHostFactory = (options) => new PlaywrightBrowserHost(options),
+): PlaywrightBrowserHost {
+  return createHost({
+    headless: !headed,
+    settleDelayMs: config.performance.settleDelayMs,
+    navigationTimeoutMs: config.performance.connectTimeoutMs,
+    mouseMoveSteps: config.mouseMoveSteps,
+  });
+}
 
 export function parseCliArgs(args: readonly string[]): CliArgs {
   let configPath: string | undefined;
@@ -75,11 +90,7 @@ export async function runCli(
     runId,
     sensitiveValues: secretEnvironmentValues(environment),
   });
-  const browserHost = new PlaywrightBrowserHost({
-    headless: !headed,
-    settleDelayMs: config.performance.settleDelayMs,
-    navigationTimeoutMs: config.performance.connectTimeoutMs,
-  });
+  const browserHost = createPlaywrightBrowserHost(config, headed);
   try {
     const summary = await new RunLoop({ browserHost, agent, logger }).run(
       config,

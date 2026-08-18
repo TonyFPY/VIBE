@@ -114,7 +114,7 @@ describe("PlaywrightBrowserHost", () => {
     await session.click(756, 386);
 
     expect(fixture.events).toContainEqual(["screenshot", { type: "jpeg", quality: 90 }]);
-    expect(fixture.events).toContainEqual(["move", 540, 338, { steps: 10 }]);
+    expect(fixture.events).toContainEqual(["move", 540, 338, { steps: 1 }]);
     expect(fixture.events).toContainEqual(["click", 756, 386]);
     expect(Object.keys(session).sort()).toEqual(["click", "close", "move", "screenshot", "subscribeBackendEvents"]);
   });

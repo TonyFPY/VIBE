@@ -128,7 +128,7 @@ export class PlaywrightBrowserHost implements BrowserHost {
         },
         move: async (x: number, y: number) => {
           assertOpen();
-          await page.mouse.move(x, y, { steps: this.options.mouseMoveSteps ?? 10 });
+          await page.mouse.move(x, y, { steps: this.options.mouseMoveSteps ?? 1 });
           await this.updateCursor(page, x, y, false);
         },
         click: async (x: number, y: number) => {

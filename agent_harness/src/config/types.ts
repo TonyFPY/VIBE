@@ -22,6 +22,7 @@ export interface HarnessConfig {
   runMode: HarnessRunMode;
   viewport: Viewport;
   screenshotQuality: number;
+  mouseMoveSteps: number;
   maxSteps: number;
   maxInvalidActions: number;
   performance: PerformanceConfig;

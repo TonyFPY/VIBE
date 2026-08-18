@@ -75,6 +75,7 @@ export function parseHarnessConfig(input: unknown): HarnessConfig {
     runMode,
     viewport: DEFAULT_VIEWPORT,
     screenshotQuality: boundedInteger(input.screenshotQuality, 90, "screenshotQuality", 80, 100),
+    mouseMoveSteps: boundedInteger(input.mouseMoveSteps, 1, "mouseMoveSteps", 1, 100),
     maxSteps: boundedInteger(input.maxSteps, 256, "maxSteps", 1, 10_000),
     maxInvalidActions: boundedInteger(input.maxInvalidActions, 3, "maxInvalidActions", 0, 100),
     performance: {

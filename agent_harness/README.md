@@ -88,6 +88,20 @@ the action status plus a fresh screenshot. Multiple function calls in one turn
 are rejected so separate experiment states are not collapsed into one model
 step.
 
+One Gemini interaction returns either a setup batch or a trial-response batch.
+Trial-response batches require at least nine pointer moves followed by a final
+click; the Start batch is exempt from this minimum. Screenshots are captured
+only at batch boundaries, after the complete batch has executed. Pointer
+movement uses non-interpolated Playwright steps by default. Set
+`mouseMoveSteps` at the top level of the JSON configuration to choose a value
+from `1` through `100`:
+
+```json
+{
+  "mouseMoveSteps": 1
+}
+```
+
 Completion is evaluator-owned. The provider can stop producing actions, but a
 run is successful only after the browser controller observes a successful
 website result save request. The website is the sole writer of behavioral

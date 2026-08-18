@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseHarnessConfig } from "../src/config/load-config";
 import type { ComputerUseAgent } from "../src/providers/computer-use-agent";
-import { createGeminiComputerUseAgent, parseCliArgs } from "../src/cli";
+import { createGeminiComputerUseAgent, createPlaywrightBrowserHost, parseCliArgs } from "../src/cli";
 
 describe("agent harness CLI arguments", () => {
   it("requires exactly one JSON configuration path", () => {
@@ -32,7 +32,7 @@ describe("agent harness CLI arguments", () => {
       provider: "gemini",
       model: "gemini-3.7-flash",
       next: async () => ({ status: "finished", actions: [], rawProviderOutput: { text: "finished" } }),
-      reportActionResult: async () => ({ status: "finished", actions: [], rawProviderOutput: { text: "finished" } }),
+      reportActionResults: async () => ({ status: "finished", actions: [], rawProviderOutput: { text: "finished" } }),
       close: async () => undefined,
     };
     let construction: unknown;
@@ -47,5 +47,24 @@ describe("agent harness CLI arguments", () => {
       performance: config.performance,
     });
     expect(() => createGeminiComputerUseAgent(config, {})).toThrow("GEMINI_API_KEY is required");
+  });
+
+  it("forwards configured mouse movement steps to the browser host", () => {
+    const config = parseHarnessConfig({
+      taskUrl: "https://vibe-9d6e5.web.app/tasks/visual-similarity",
+      participantId: "001",
+      model: "google/gemini-3.7-flash",
+      runMode: "dev",
+      mouseMoveSteps: 23,
+    });
+    let options: unknown;
+    createPlaywrightBrowserHost(config, false, (hostOptions) => {
+      options = hostOptions;
+      return {} as never;
+    });
+    expect(options).toMatchObject({
+      headless: true,
+      mouseMoveSteps: 23,
+    });
   });
 });
