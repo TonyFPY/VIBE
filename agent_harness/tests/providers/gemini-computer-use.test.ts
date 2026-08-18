@@ -97,6 +97,47 @@ describe("GeminiComputerUseAgent", () => {
     })]);
   });
 
+  it("serializes only the public observation and the complete restricted tool contract", async () => {
+    const publicObservation: AgentObservation = {
+      ...observation,
+      publicInstruction: "PUBLIC_INSTRUCTION_CANARY: use only visible pixels.",
+    };
+    const transport = fakeTransport(interaction([
+      functionCall("click_visible", { x: 700, y: 500, intent: "start" }),
+    ]));
+
+    await agent(transport).next(publicObservation, new AbortController().signal);
+
+    const request = transport.requests[0] as {
+      input: Array<Record<string, unknown>>;
+      tools: Array<Record<string, unknown>>;
+    };
+    expect(Object.keys(request).sort()).toEqual(["input", "model", "tools"]);
+    expect(request.input).toEqual([
+      { type: "text", text: expect.stringContaining("PUBLIC_INSTRUCTION_CANARY") },
+      { type: "image", data: "/9j/", mime_type: "image/jpeg" },
+    ]);
+    expect(request.tools[0]).toEqual({
+      type: "computer_use",
+      environment: "browser",
+      enable_prompt_injection_detection: true,
+      excluded_predefined_functions: [
+        "click", "move", "double_click", "triple_click", "middle_click", "right_click", "mouse_down", "mouse_up",
+        "type", "drag_and_drop", "press_key", "key_down", "key_up", "hotkey", "take_screenshot",
+        "scroll", "go_back", "navigate", "go_forward", "wait",
+      ],
+    });
+
+    const serialized = JSON.stringify(request);
+    expect(serialized).toContain("PUBLIC_INSTRUCTION_CANARY");
+    for (const privilegedValue of [
+      "SECRET_ANSWER_CANARY", "PRIVATE_TASK_METADATA_CANARY", "Playwright", "page", "url", "DOM", "accessibility", "filesystem",
+      "click_at", "hover_at", "wait_5_seconds",
+    ]) {
+      expect(serialized).not.toContain(privilegedValue);
+    }
+  });
+
   it("parses click_visible into one normalized click", async () => {
     await expect(agent(fakeTransport(interaction([
       functionCall("click_visible", { x: 700, y: 500, intent: "choose the visible candidate" }),
@@ -170,10 +211,15 @@ describe("GeminiComputerUseAgent", () => {
 
   it.each([
     ["a non-finite setup coordinate", functionCall("click_visible", { x: Number.NaN, y: 500, intent: "start" })],
+    ["a fractional setup coordinate", functionCall("click_visible", { x: 700.5, y: 500, intent: "start" })],
     ["an out-of-range trial move", functionCall("submit_trial_actions", trialArguments([
       { x: 1000, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }, { x: 4, y: 4 },
       { x: 5, y: 5 }, { x: 6, y: 6 }, { x: 7, y: 7 }, { x: 8, y: 8 },
     ]))],
+    ["a fractional trial coordinate", functionCall("submit_trial_actions", {
+      moves: [{ x: 0.5, y: 0 }, ...Array.from({ length: 8 }, (_, x) => ({ x, y: x }))],
+      click: { x: 500, y: 500 },
+    })],
     ["a malformed final click", functionCall("submit_trial_actions", { moves: Array.from({ length: 9 }, () => ({ x: 1, y: 1 })), click: { x: 500 } })],
   ])("rejects %s", async (_name, call) => {
     await expect(agent(fakeTransport(interaction([call]))).next(observation, new AbortController().signal)).resolves.toMatchObject({
@@ -257,6 +303,49 @@ describe("GeminiComputerUseAgent", () => {
         ],
       }],
     });
+  });
+
+  it("attaches the fresh screenshot only to the final result across multiple custom calls", async () => {
+    const transport = fakeTransport(
+      interaction([
+        functionCall("click_visible", { x: 500, y: 500, intent: "start" }, "setup-1"),
+        functionCall("submit_trial_actions", trialArguments([
+          { x: 0, y: 0 }, { x: 100, y: 100 }, { x: 200, y: 200 }, { x: 300, y: 300 }, { x: 400, y: 400 },
+          { x: 500, y: 500 }, { x: 600, y: 600 }, { x: 700, y: 700 }, { x: 800, y: 800 },
+        ]), "trial-1"),
+      ]),
+      interaction([{ type: "text", text: "Completed." }], "interaction-2"),
+    );
+    const computerUseAgent = agent(transport);
+    const signal = new AbortController().signal;
+    const firstTurn = await computerUseAgent.next(observation, signal);
+    expect(firstTurn.actions).toHaveLength(11);
+    const results: readonly ActionResult[] = firstTurn.actions.map((action) => ({ action, status: "executed" }));
+    const nextObservation: AgentObservation = { ...observation, screenshot: Uint8Array.from([1, 2, 3]) };
+
+    await expect(computerUseAgent.reportActionResults(nextObservation, results, signal)).resolves.toMatchObject({
+      status: "finished",
+      actions: [],
+    });
+
+    const continuation = transport.requests[1] as { input: Array<{ result: Array<{ type: string; data?: string }> }> };
+    expect(continuation.input).toEqual([
+      expect.objectContaining({
+        call_id: "setup-1",
+        name: "click_visible",
+        result: [{ type: "text", text: JSON.stringify([{ status: "executed", error: undefined }]) }],
+      }),
+      expect.objectContaining({
+        call_id: "trial-1",
+        name: "submit_trial_actions",
+        result: [
+          { type: "text", text: JSON.stringify(Array.from({ length: 10 }, () => ({ status: "executed", error: undefined }))) },
+          { type: "image", data: "AQID", mime_type: "image/jpeg" },
+        ],
+      }),
+    ]);
+    expect(continuation.input[0].result.some((part) => part.type === "image")).toBe(false);
+    expect(continuation.input[1].result.filter((part) => part.type === "image")).toHaveLength(1);
   });
 
   it("blocks native pointer calls rather than accepting them as custom actions", async () => {

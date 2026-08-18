@@ -114,6 +114,10 @@ function hasFiniteNumber(record: Record<string, unknown>, key: string): record i
   return typeof record[key] === "number" && Number.isFinite(record[key]);
 }
 
+function hasFiniteInteger(record: Record<string, unknown>, key: string): record is Record<string, number> {
+  return hasFiniteNumber(record, key) && Number.isInteger(record[key]);
+}
+
 function hasOnlyKeys(record: Record<string, unknown>, allowedKeys: readonly string[]): boolean {
   return Object.keys(record).every((key) => allowedKeys.includes(key));
 }
@@ -182,7 +186,7 @@ function normalizedPointerAction(
 ): ComputerAction | undefined {
   const allowedKeys = requiresIntent ? ["x", "y", "intent"] : ["x", "y"];
   if (!hasOnlyKeys(arguments_, allowedKeys)) return undefined;
-  if (!hasFiniteNumber(arguments_, "x") || !hasFiniteNumber(arguments_, "y")) return undefined;
+  if (!hasFiniteInteger(arguments_, "x") || !hasFiniteInteger(arguments_, "y")) return undefined;
   if (requiresIntent && typeof arguments_.intent !== "string") return undefined;
   try {
     return {
