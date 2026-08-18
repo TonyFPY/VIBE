@@ -1,6 +1,7 @@
-import { executeComputerAction } from "../actions/executor";
-import { validateComputerAction } from "../actions/policy";
+import { executeComputerActionBatch } from "../actions/executor";
+import { validateComputerActionBatch } from "../actions/policy";
 import type { ActionResult, AgentObservation, AgentTurn, ComputerAction } from "../actions/contract";
+import type { ActionBatchPhase } from "../actions/policy";
 import type { BackendEvent, BrowserHost, BrowserSession } from "../browser/browser-types";
 import { buildTaskUrl } from "../config/load-config";
 import type { HarnessConfig } from "../config/types";
@@ -25,14 +26,14 @@ interface BackendState {
   failureReason?: string;
 }
 
-type ProviderMethod = "next" | "reportActionResult";
+type ProviderMethod = "next" | "reportActionResults";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown harness failure";
 }
 
-function rejectedActionFor(actions: readonly ComputerAction[]): ComputerAction {
-  return actions.length === 1 ? actions[0] : { type: "wait", milliseconds: 0 };
+function rejectedActionsFor(actions: readonly ComputerAction[]): ComputerAction[] {
+  return actions.length === 0 ? [{ type: "wait", milliseconds: 0 }] : [...actions];
 }
 
 function rawProviderOutputWithoutResponseBodies(rawProviderOutput: unknown): unknown {
@@ -144,7 +145,6 @@ export class RunLoop {
         }));
       });
 
-      await this.beginFixation(session, config, summary, timing.actionAndLog);
       let observation = await this.captureObservation(session, config, publicInstruction, summary, timing.screenshotAndLog);
       summary = { ...summary, status: "incomplete", failureReason: "provider finished before result response" };
       let turn = await this.callProvider(
@@ -158,6 +158,7 @@ export class RunLoop {
         setTimeoutIfExpired,
         setStepLimitIfReached,
       );
+      let phase: ActionBatchPhase = "setup";
 
       while (turn) {
         if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
@@ -171,20 +172,22 @@ export class RunLoop {
         }
 
         const validationStartedAt = this.nowMs();
-        const actionValidation = this.validateSingleAction(turn.actions, config);
+        const actionValidation = validateComputerActionBatch(turn.actions, config.viewport, phase);
         timing.parseAndValidate.observe(this.nowMs() - validationStartedAt);
         if (!actionValidation.valid) {
           summary.invalidActionCount += 1;
-          const rejectedResult: ActionResult = {
-            action: rejectedActionFor(turn.actions),
+          const rejectedResults: ActionResult[] = rejectedActionsFor(turn.actions).map((action) => ({
+            action,
             status: "rejected",
             error: actionValidation.error,
-          };
-          await this.logAction(summary.stepCount, rejectedResult.action, false, actionValidation.error);
+          }));
+          for (const [index, result] of rejectedResults.entries()) {
+            await this.logAction(summary.stepCount, result.action, false, actionValidation.error, index + 1, rejectedResults.length);
+          }
           const reportedTurn = await this.callProvider(
-            "reportActionResult",
+            "reportActionResults",
             observation,
-            rejectedResult,
+            rejectedResults,
             config,
             timing.provider,
             summary,
@@ -213,30 +216,38 @@ export class RunLoop {
           continue;
         }
 
-        const action = actionValidation.action;
         const actionStartedAt = this.nowMs();
-        const result = await executeComputerAction(session, action, this.sleep);
-        await this.logAction(summary.stepCount, action, result.status === "executed", result.error);
+        const execution = await executeComputerActionBatch(session, turn.actions, this.sleep);
+        for (const [index, result] of execution.results.entries()) {
+          await this.logAction(
+            summary.stepCount,
+            result.action,
+            result.status === "executed",
+            result.error,
+            index + 1,
+            turn.actions.length,
+          );
+        }
         timing.actionAndLog.observe(this.nowMs() - actionStartedAt);
-        if (result.status === "failed") {
-          summary = { ...summary, status: "failed", failureReason: result.error };
+        summary.actionCount += execution.results.filter((result) => result.status === "executed").length;
+        if (execution.failed) {
+          const failure = execution.results.find((result) => result.status === "failed");
+          summary = { ...summary, status: "failed", failureReason: failure?.error ?? "Action execution failed" };
           break;
         }
-        summary.actionCount += 1;
-        if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
         const settleStartedAt = this.nowMs();
         await this.sleep(config.performance.settleDelayMs);
         timing.settle.observe(this.nowMs() - settleStartedAt);
-        if (action.type === "click") {
-          await this.beginFixation(session, config, summary, timing.actionAndLog);
-        }
+        if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
+        await this.beginFixation(session, config, summary, timing.actionAndLog);
         if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
         observation = await this.captureObservation(session, config, publicInstruction, summary, timing.screenshotAndLog);
         if (setTerminalFromBackend() || setTimeoutIfExpired() || setStepLimitIfReached()) break;
+        phase = "trial";
         turn = await this.callProvider(
-          "reportActionResult",
+          "reportActionResults",
           observation,
-          result,
+          execution.results,
           config,
           timing.provider,
           summary,
@@ -333,23 +344,13 @@ export class RunLoop {
     timing.observe(this.nowMs() - startedAt);
   }
 
-  private validateSingleAction(
-    actions: readonly ComputerAction[],
-    config: HarnessConfig,
-  ): { valid: true; action: ComputerAction } | { valid: false; error: string } {
-    if (actions.length !== 1) {
-      return { valid: false, error: `Provider returned ${actions.length} actions; exactly one action is required` };
-    }
-    const validation = validateComputerAction(actions[0], config.viewport);
-    if (!validation.valid) return validation;
-    return { valid: true, action: actions[0] };
-  }
-
   private async logAction(
     step: number,
     action: ComputerAction,
     actionValid: boolean,
     error?: string,
+    batchIndex?: number,
+    batchSize?: number,
   ): Promise<void> {
     await this.dependencies.logger.log({
       type: "action",
@@ -357,6 +358,8 @@ export class RunLoop {
       step,
       parsedAction: action,
       actionValid,
+      ...(batchIndex === undefined ? {} : { batchIndex }),
+      ...(batchSize === undefined ? {} : { batchSize }),
       ...(error ? { error } : {}),
     });
   }
@@ -382,7 +385,7 @@ export class RunLoop {
   private async callProvider(
     method: ProviderMethod,
     observation: AgentObservation,
-    result: ActionResult | undefined,
+    results: readonly ActionResult[] | undefined,
     config: HarnessConfig,
     timing: TimingHistogram,
     summary: RunSummary,
@@ -397,7 +400,7 @@ export class RunLoop {
     const turn = await this.requestWithTimeout(
       method === "next"
         ? (signal) => this.dependencies.agent.next(observation, signal)
-        : (signal) => this.dependencies.agent.reportActionResult(observation, result!, signal),
+        : (signal) => this.dependencies.agent.reportActionResults(observation, results!, signal),
       config.performance.requestTimeoutMs,
     );
     const providerCompletedAt = this.nowIso();

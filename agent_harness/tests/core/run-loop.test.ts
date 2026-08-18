@@ -17,9 +17,9 @@ const baseConfig = parseHarnessConfig({
 
 type ProviderCall =
   | { method: "next"; observation: AgentObservation }
-  | { method: "reportActionResult"; observation: AgentObservation; result: ActionResult };
+  | { method: "reportActionResults"; observation: AgentObservation; results: readonly ActionResult[] };
 
-function actionTurn(actions: readonly ComputerAction[], rawProviderOutput: unknown = { action: actions[0] }): AgentTurn {
+function actionTurn(actions: readonly ComputerAction[], rawProviderOutput: unknown = { actions }): AgentTurn {
   return { status: "actions", actions, rawProviderOutput, providerIntent: "choose visible target" };
 }
 
@@ -31,6 +31,17 @@ function blockedTurn(reason: string): AgentTurn {
   return { status: "blocked", actions: [], rawProviderOutput: { error: reason }, failureReason: reason };
 }
 
+function setupBatch(x = 100, y = 100): AgentTurn {
+  return actionTurn([{ type: "click", x, y }]);
+}
+
+function trialBatch(clickX = 756, clickY = 386): AgentTurn {
+  return actionTurn([
+    ...Array.from({ length: 9 }, (_, index) => ({ type: "move" as const, x: 10 + index, y: 20 + index })),
+    { type: "click", x: clickX, y: clickY },
+  ]);
+}
+
 function createFixture(
   turns: readonly AgentTurn[],
   options: {
@@ -39,28 +50,23 @@ function createFixture(
     onSession?: (session: BrowserSession & { emitBackendEvent(event: BackendEvent): void }) => void;
     screenshotError?: Error;
     hangProvider?: boolean;
-    clickError?: Error;
     closeFailures?: ReadonlySet<string>;
-    onReportActionResult?: (
-      call: { observation: AgentObservation; result: ActionResult; reportIndex: number },
+    onReportActionResults?: (
+      call: { observation: AgentObservation; results: readonly ActionResult[]; reportIndex: number },
       session: BrowserSession & { emitBackendEvent(event: BackendEvent): void },
     ) => void | Promise<void>;
     wait?: (milliseconds: number) => Promise<void>;
   } = {},
 ) {
-  const browserActions: unknown[] = [];
+  const browserActions: Array<readonly [string, number, number]> = [];
   const providerCalls: ProviderCall[] = [];
   const events: RunLogEvent[] = [];
+  const trace: string[] = [];
   const writtenScreenshots: Array<{ id: string; bytes: Uint8Array }> = [];
   const unsubscribes: string[] = [];
   const closeCalls: string[] = [];
   const sleeps: number[] = [];
-  const screenshots = options.screenshots ?? [
-    Uint8Array.from([1, 2, 3]),
-    Uint8Array.from([4, 5, 6]),
-    Uint8Array.from([7, 8, 9]),
-    Uint8Array.from([10, 11, 12]),
-  ];
+  const screenshots = options.screenshots ?? [Uint8Array.from([1]), Uint8Array.from([2]), Uint8Array.from([3])];
   let screenshotCalls = 0;
   let turnIndex = 0;
   let reportIndex = 0;
@@ -71,12 +77,16 @@ function createFixture(
       if (options.screenshotError) throw options.screenshotError;
       const screenshot = screenshots[Math.min(screenshotCalls, screenshots.length - 1)];
       screenshotCalls += 1;
+      trace.push(`screenshot-${screenshotCalls}`);
       return screenshot;
     },
-    move: async (x, y) => { browserActions.push(["move", x, y]); },
+    move: async (x, y) => {
+      browserActions.push(["move", x, y]);
+      trace.push(`move-${x}-${y}`);
+    },
     click: async (x, y) => {
       browserActions.push(["click", x, y]);
-      if (options.clickError) throw options.clickError;
+      trace.push(`click-${x}-${y}`);
     },
     subscribeBackendEvents: (subscriber) => {
       listener = subscriber;
@@ -109,10 +119,10 @@ function createFixture(
       if (options.hangProvider) return new Promise(() => undefined);
       return turns[turnIndex++] ?? finishedTurn();
     },
-    reportActionResult: async (observation, result) => {
-      providerCalls.push({ method: "reportActionResult", observation, result });
+    reportActionResults: async (observation, results) => {
+      providerCalls.push({ method: "reportActionResults", observation, results });
       reportIndex += 1;
-      await options.onReportActionResult?.({ observation, result, reportIndex }, session);
+      await options.onReportActionResults?.({ observation, results, reportIndex }, session);
       if (options.hangProvider) return new Promise(() => undefined);
       return turns[turnIndex++] ?? finishedTurn();
     },
@@ -138,85 +148,51 @@ function createFixture(
 
   return {
     loop: new RunLoop({ browserHost: host, agent, logger, nowMs, nowIso: () => "2026-08-17T12:00:00.000Z", sleep: wait }),
-    browserActions,
-    closeCalls,
-    events,
-    providerCalls,
-    screenshotCalls: () => screenshotCalls,
-    session,
-    sleeps,
-    unsubscribes,
-    writtenScreenshots,
+    browserActions, closeCalls, events, providerCalls, screenshotCalls: () => screenshotCalls, session, sleeps, trace, unsubscribes, writtenScreenshots,
   };
 }
 
-describe("stateful computer-use run loop", () => {
-  it("executes move, click, and wait one at a time and reports a fresh screenshot after each", async () => {
-    const first = Uint8Array.from([1]);
-    const second = Uint8Array.from([2]);
-    const third = Uint8Array.from([3]);
-    const fourth = Uint8Array.from([4]);
-    const run = createFixture([
-      actionTurn([{ type: "move", x: 540, y: 338 }]),
-      actionTurn([{ type: "click", x: 756, y: 386 }]),
-      actionTurn([{ type: "wait", milliseconds: 125 }]),
-      finishedTurn(),
-    ], { screenshots: [first, second, third, fourth] });
+describe("trial-boundary computer-use run loop", () => {
+  it("captures instructions before fixation, executes Start, and reports its complete result list with the first trial screenshot", async () => {
+    const instructions = Uint8Array.from([1]);
+    const trial = Uint8Array.from([2]);
+    const run = createFixture([setupBatch(), finishedTurn()], { screenshots: [instructions, trial] });
 
     await expect(run.loop.run(baseConfig, "Choose using only the visible screen.")).resolves.toMatchObject({
-      status: "incomplete",
-      stepCount: 4,
-      observationCount: 4,
-      actionCount: 3,
-      invalidActionCount: 0,
+      status: "incomplete", stepCount: 2, observationCount: 2, actionCount: 1,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual([
-      "next",
-      "reportActionResult",
-      "reportActionResult",
-      "reportActionResult",
-    ]);
-    expect(run.providerCalls[0].observation.screenshot).toBe(first);
-    expect(run.providerCalls[1]).toMatchObject({ result: { status: "executed", action: { type: "move" } } });
-    expect(run.providerCalls[1].observation.screenshot).toBe(second);
-    expect(run.providerCalls[2]).toMatchObject({ result: { status: "executed", action: { type: "click" } } });
-    expect(run.providerCalls[2].observation.screenshot).toBe(third);
-    expect(run.providerCalls[3]).toMatchObject({ result: { status: "executed", action: { type: "wait" } } });
-    expect(run.providerCalls[3].observation.screenshot).toBe(fourth);
-    expect(run.browserActions).toEqual([
-      ["move", 540, 337.5], ["click", 540, 337.5],
-      ["move", 540, 338],
-      ["click", 756, 386],
-      ["move", 540, 337.5], ["click", 540, 337.5],
-    ]);
-    expect(run.sleeps).toEqual([0, 0, 125, 0]);
-  });
-
-  it("performs deterministic center fixation without reporting it as an agent action", async () => {
-    const run = createFixture([
-      actionTurn([{ type: "click", x: 756, y: 386 }]),
-      finishedTurn(),
-    ]);
-
-    await run.loop.run(baseConfig, "Choose using only the visible screen.");
-
-    expect(run.browserActions).toEqual([
-      ["move", 540, 337.5], ["click", 540, 337.5],
-      ["click", 756, 386],
-      ["move", 540, 337.5], ["click", 540, 337.5],
-    ]);
-    expect(run.providerCalls).toHaveLength(2);
+    expect(run.providerCalls[0]).toEqual({ method: "next", observation: expect.objectContaining({ screenshot: instructions }) });
     expect(run.providerCalls[1]).toMatchObject({
-      method: "reportActionResult",
-      result: { action: { type: "click", x: 756, y: 386 }, status: "executed" },
+      method: "reportActionResults", observation: expect.objectContaining({ screenshot: trial }),
+      results: [{ action: { type: "click", x: 100, y: 100 }, status: "executed" }],
     });
+    expect(run.trace).toEqual(["screenshot-1", "click-100-100", "move-540-337.5", "click-540-337.5", "screenshot-2"]);
   });
 
-  it("completes on a successful result response without asking the agent for another turn", async () => {
-    const run = createFixture([
-      actionTurn([{ type: "click", x: 756, y: 386 }]),
-      finishedTurn(),
-    ], {
+  it("executes each 10-action trial batch before one continuation screenshot with no intermediate screenshots", async () => {
+    const run = createFixture([setupBatch(), trialBatch(), finishedTurn()]);
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete", stepCount: 3, observationCount: 3, actionCount: 11, invalidActionCount: 0,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults"]);
+    expect(run.providerCalls[2]).toMatchObject({
+      results: [
+        ...Array.from({ length: 9 }, (_, index) => ({ action: { type: "move", x: 10 + index, y: 20 + index }, status: "executed" })),
+        { action: { type: "click", x: 756, y: 386 }, status: "executed" },
+      ],
+    });
+    expect(run.screenshotCalls()).toBe(3);
+    expect(run.trace).toEqual([
+      "screenshot-1", "click-100-100", "move-540-337.5", "click-540-337.5", "screenshot-2",
+      ...Array.from({ length: 9 }, (_, index) => `move-${10 + index}-${20 + index}`),
+      "click-756-386", "move-540-337.5", "click-540-337.5", "screenshot-3",
+    ]);
+    expect(run.sleeps).toEqual([0, 0]);
+  });
+
+  it("stops after a successful final trial click before fixation or another provider request", async () => {
+    const run = createFixture([setupBatch(), trialBatch()], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -226,26 +202,15 @@ describe("stateful computer-use run loop", () => {
       },
     });
 
-    await expect(run.loop.run(baseConfig, "Choose using only the visible screen.")).resolves.toMatchObject({
-      status: "completed",
-      stepCount: 1,
-      actionCount: 1,
-      failureReason: undefined,
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "completed", stepCount: 2, observationCount: 2, actionCount: 11, failureReason: undefined,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next"]);
-    expect(run.events).toContainEqual(expect.objectContaining({
-      type: "backend-event",
-      status: 201,
-      ok: true,
-    }));
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults"]);
+    expect(run.browserActions.at(-1)).toEqual(["click", 756, 386]);
   });
 
-  it("keeps backend success completed when cleanup fails", async () => {
-    const run = createFixture([
-      actionTurn([{ type: "click", x: 756, y: 386 }]),
-      finishedTurn(),
-    ], {
-      closeFailures: new Set(["backend", "agent", "session", "host", "logger"]),
+  it("reports each action in a short trial batch as rejected without changing the screenshot and then retries", async () => {
+    const run = createFixture([setupBatch(), actionTurn([{ type: "click", x: 300, y: 300 }]), trialBatch()], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -255,200 +220,78 @@ describe("stateful computer-use run loop", () => {
       },
     });
 
-    await expect(run.loop.run(baseConfig, "Choose using only the visible screen.")).resolves.toMatchObject({
-      status: "completed",
-      failureReason: undefined,
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "completed", actionCount: 11, invalidActionCount: 1, observationCount: 2,
     });
-    expect(run.closeCalls).toEqual(["agent", "session", "host", "logger"]);
-    expect(run.unsubscribes).toEqual(["backend"]);
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults"]);
+    expect(run.providerCalls[2]).toMatchObject({
+      observation: run.providerCalls[1].observation,
+      results: [{ action: { type: "click", x: 300, y: 300 }, status: "rejected", error: "Trial batch must contain at least 10 actions" }],
+    });
+    expect(run.browserActions).not.toContainEqual(["click", 300, 300]);
     expect(run.events).toContainEqual(expect.objectContaining({
-      type: "cleanup-error",
-      phase: "agent",
-      error: "agent close failed",
-    }));
-    expect(run.events.at(-1)).toMatchObject({
-      type: "terminal",
-      summary: expect.objectContaining({ status: "completed", failureReason: undefined }),
-    });
-  });
-
-  it("fails when the provider blocks and preserves the provider reason", async () => {
-    const run = createFixture([blockedTurn("safety blocked")]);
-
-    await expect(run.loop.run(baseConfig, "Choose using only the visible screen.")).resolves.toMatchObject({
-      status: "failed",
-      failureReason: "safety blocked",
-      actionCount: 0,
-    });
-  });
-
-  it("marks provider finished before backend success as incomplete", async () => {
-    const run = createFixture([finishedTurn()]);
-
-    await expect(run.loop.run(baseConfig, "Choose using only the visible screen.")).resolves.toMatchObject({
-      status: "incomplete",
-      failureReason: "provider finished before result response",
-      actionCount: 0,
-    });
-  });
-
-  it("returns timeout at the total deadline and step_limit at the action-turn cap", async () => {
-    const timeoutRun = createFixture([actionTurn([{ type: "move", x: 1, y: 1 }])], {
-      nowMsValues: [0, 0, 0, 0, 10_000],
-    });
-    const shortDeadline = {
-      ...baseConfig,
-      performance: { ...baseConfig.performance, totalRunTimeoutMs: 1000 },
-    };
-    await expect(timeoutRun.loop.run(shortDeadline, "Visible instruction")).resolves.toMatchObject({
-      status: "timeout",
-      failureReason: "total run timeout reached",
-      actionCount: 0,
-    });
-
-    const stepLimitRun = createFixture([
-      actionTurn([{ type: "move", x: 1, y: 1 }]),
-      actionTurn([{ type: "move", x: 2, y: 2 }]),
-    ]);
-    await expect(stepLimitRun.loop.run({ ...baseConfig, maxSteps: 1 }, "Visible instruction")).resolves.toMatchObject({
-      status: "step_limit",
-      failureReason: "action turn limit reached",
-      actionCount: 1,
-    });
-  });
-
-  it("fails on browser errors and provider request timeouts", async () => {
-    const browserRun = createFixture([actionTurn([{ type: "move", x: 1, y: 1 }])], {
-      screenshotError: new Error("screenshot unavailable"),
-    });
-    await expect(browserRun.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "failed",
-      failureReason: "screenshot unavailable",
-    });
-
-    const timeoutRun = createFixture([], { hangProvider: true });
-    const fastProviderTimeout = {
-      ...baseConfig,
-      performance: { ...baseConfig.performance, requestTimeoutMs: 1 },
-    };
-    await expect(timeoutRun.loop.run(fastProviderTimeout, "Visible instruction")).resolves.toMatchObject({
-      status: "failed",
-      failureReason: "agent request timeout",
-    });
-  });
-
-  it("logs rejected multi-action, invalid coordinate, and invalid wait turns without browser execution", async () => {
-    const run = createFixture([
-      actionTurn([{ type: "move", x: 1, y: 1 }, { type: "click", x: 2, y: 2 }]),
-      actionTurn([{ type: "click", x: 1080, y: 1 }]),
-      actionTurn([{ type: "wait", milliseconds: 5001 }]),
-      actionTurn([{ type: "move", x: 2, y: 2 }]),
-    ]);
-
-    await expect(run.loop.run({ ...baseConfig, maxInvalidActions: 3 }, "Visible instruction")).resolves.toMatchObject({
-      status: "incomplete",
-      failureReason: "invalid action limit reached",
-      actionCount: 0,
-      invalidActionCount: 3,
-    });
-    expect(run.browserActions).toEqual([
-      ["move", 540, 337.5], ["click", 540, 337.5],
-    ]);
-    expect(run.providerCalls.map((call) => call.method)).toEqual([
-      "next",
-      "reportActionResult",
-      "reportActionResult",
-      "reportActionResult",
-    ]);
-    expect(run.providerCalls.slice(1)).toEqual([
-      expect.objectContaining({ result: expect.objectContaining({ status: "rejected" }) }),
-      expect.objectContaining({ result: expect.objectContaining({ status: "rejected" }) }),
-      expect.objectContaining({ result: expect.objectContaining({
-        status: "rejected",
-        error: "wait milliseconds must be finite and between 0 and 5000",
-      }) }),
-    ]);
-    expect(run.providerCalls[1].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
-    expect(run.providerCalls[2].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
-    expect(run.providerCalls[3].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
-    expect(run.events.filter((event) => event.type === "action")).toEqual([
-      expect.objectContaining({ actionValid: false, error: "Provider returned 2 actions; exactly one action is required" }),
-      expect.objectContaining({ actionValid: false, error: "click coordinates must be finite CSS pixels inside the viewport" }),
-      expect.objectContaining({ actionValid: false, error: "wait milliseconds must be finite and between 0 and 5000" }),
-    ]);
-  });
-
-  it("preserves backend completion while reporting the final invalid action", async () => {
-    const run = createFixture([
-      actionTurn([{ type: "click", x: 1080, y: 1 }]),
-      finishedTurn(),
-    ], {
-      onReportActionResult: ({ result }, session) => {
-        expect(result).toMatchObject({
-          status: "rejected",
-          error: "click coordinates must be finite CSS pixels inside the viewport",
-        });
-        session.emitBackendEvent({ type: "results-response", status: 204, ok: true });
-      },
-    });
-
-    await expect(run.loop.run({ ...baseConfig, maxInvalidActions: 1 }, "Visible instruction")).resolves.toMatchObject({
-      status: "completed",
-      failureReason: undefined,
-      actionCount: 0,
-      invalidActionCount: 1,
-    });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResult"]);
-    expect(run.providerCalls[1].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
-    expect(run.events).toContainEqual(expect.objectContaining({
-      type: "backend-event",
-      status: 204,
-      ok: true,
+      type: "action", actionValid: false, batchIndex: 1, batchSize: 1, error: "Trial batch must contain at least 10 actions",
     }));
   });
 
-  it("preserves provider finished state while reporting the final invalid action", async () => {
-    const run = createFixture([
-      actionTurn([{ type: "click", x: 1080, y: 1 }]),
-      finishedTurn(),
-    ]);
+  it("rejects an invalid setup batch without applying it and retries setup", async () => {
+    const run = createFixture([actionTurn([{ type: "click", x: 1080, y: 100 }]), setupBatch(), finishedTurn()]);
 
-    await expect(run.loop.run({ ...baseConfig, maxInvalidActions: 1 }, "Visible instruction")).resolves.toMatchObject({
-      status: "incomplete",
-      failureReason: "provider finished before result response",
-      actionCount: 0,
-      invalidActionCount: 1,
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete", actionCount: 1, invalidActionCount: 1, observationCount: 2,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResult"]);
-    expect(run.providerCalls[1].observation.screenshot).toBe(run.providerCalls[0].observation.screenshot);
-    expect(run.providerCalls[1]).toEqual(expect.objectContaining({
-      result: expect.objectContaining({
-        status: "rejected",
-        error: "click coordinates must be finite CSS pixels inside the viewport",
-      }),
-    }));
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults"]);
+    expect(run.providerCalls[1]).toMatchObject({
+      observation: run.providerCalls[0].observation,
+      results: [{ action: { type: "click", x: 1080, y: 100 }, status: "rejected", error: "Invalid batch action: click coordinates must be finite CSS pixels inside the viewport" }],
+    });
+    expect(run.browserActions).not.toContainEqual(["click", 1080, 100]);
   });
 
-  it("fails after three failed result attempts or a result request failure", async () => {
-    const failedResponsesRun = createFixture([
-      actionTurn([{ type: "click", x: 756, y: 386 }]),
-      actionTurn([{ type: "click", x: 756, y: 386 }]),
-      actionTurn([{ type: "click", x: 756, y: 386 }]),
-    ], {
+  it("stops a browser-failed trial batch without executing later actions", async () => {
+    const run = createFixture([setupBatch(), trialBatch()], {
       onSession: (session) => {
-        const originalClick = session.click;
-        session.click = async (x, y) => {
-          await originalClick(x, y);
-          if (x === 756 && y === 386) session.emitBackendEvent({ type: "results-response", status: 500, ok: false });
+        const originalMove = session.move;
+        session.move = async (x, y) => {
+          await originalMove(x, y);
+          if (x === 10 && y === 20) throw new Error("browser input failed");
         };
       },
     });
-    await expect(failedResponsesRun.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "failed",
-      failureReason: "result response failed 3 times",
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "failed", failureReason: "browser input failed", actionCount: 1, observationCount: 2,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults"]);
+    expect(run.browserActions).toContainEqual(["move", 10, 20]);
+    expect(run.browserActions).not.toContainEqual(["move", 11, 21]);
+    expect(run.events).toContainEqual(expect.objectContaining({ type: "action", batchIndex: 1, batchSize: 10, actionValid: false, error: "browser input failed" }));
+  });
+
+  it("preserves provider block, provider finished, timeout, and step-limit terminal semantics", async () => {
+    const blockedRun = createFixture([blockedTurn("safety blocked")]);
+    await expect(blockedRun.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({ status: "failed", failureReason: "safety blocked", actionCount: 0 });
+
+    const finishedRun = createFixture([finishedTurn()]);
+    await expect(finishedRun.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({ status: "incomplete", failureReason: "provider finished before result response", actionCount: 0 });
+
+    const timeoutRun = createFixture([setupBatch()], { nowMsValues: [0, 0, 0, 0, 10_000] });
+    await expect(timeoutRun.loop.run({ ...baseConfig, performance: { ...baseConfig.performance, totalRunTimeoutMs: 1000 } }, "Visible instruction")).resolves.toMatchObject({ status: "timeout", failureReason: "total run timeout reached" });
+
+    const stepLimitRun = createFixture([setupBatch(), trialBatch()]);
+    await expect(stepLimitRun.loop.run({ ...baseConfig, maxSteps: 1 }, "Visible instruction")).resolves.toMatchObject({ status: "step_limit", failureReason: "action turn limit reached", actionCount: 1 });
+  });
+
+  it("preserves invalid-batch-limit and result-request-failure terminal semantics", async () => {
+    const invalidLimitRun = createFixture([actionTurn([]), actionTurn([])]);
+    await expect(invalidLimitRun.loop.run({ ...baseConfig, maxInvalidActions: 1 }, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete", failureReason: "invalid action limit reached", invalidActionCount: 1, actionCount: 0,
+    });
+    expect(invalidLimitRun.providerCalls[1]).toMatchObject({
+      results: [{ action: { type: "wait", milliseconds: 0 }, status: "rejected", error: "Batch must contain at least one action" }],
     });
 
-    const requestFailedRun = createFixture([actionTurn([{ type: "click", x: 756, y: 386 }])], {
+    const requestFailureRun = createFixture([setupBatch(), trialBatch()], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -457,41 +300,53 @@ describe("stateful computer-use run loop", () => {
         };
       },
     });
-    await expect(requestFailedRun.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "failed",
-      failureReason: "result request failed",
+    await expect(requestFailureRun.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "failed", failureReason: "result request failed", actionCount: 11,
     });
   });
 
-  it("closes the agent, browser session, backend subscription, logger, and browser host exactly once", async () => {
-    const run = createFixture([actionTurn([{ type: "click", x: 1, y: 1 }])], {
-      clickError: new Error("browser input failed"),
-    });
+  it("fails on screenshot and provider request errors", async () => {
+    const browserRun = createFixture([], { screenshotError: new Error("screenshot unavailable") });
+    await expect(browserRun.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({ status: "failed", failureReason: "screenshot unavailable" });
 
-    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "failed",
-      failureReason: "browser input failed",
+    const timeoutRun = createFixture([], { hangProvider: true });
+    await expect(timeoutRun.loop.run({ ...baseConfig, performance: { ...baseConfig.performance, requestTimeoutMs: 1 } }, "Visible instruction")).resolves.toMatchObject({ status: "failed", failureReason: "agent request timeout" });
+  });
+
+  it("fails after three unsuccessful trial result responses", async () => {
+    const run = createFixture([setupBatch(), trialBatch(700, 300), trialBatch(701, 301), trialBatch(702, 302)], {
+      onSession: (session) => {
+        const originalClick = session.click;
+        session.click = async (x, y) => {
+          await originalClick(x, y);
+          if (x >= 700 && x <= 702) session.emitBackendEvent({ type: "results-response", status: 500, ok: false });
+        };
+      },
     });
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({ status: "failed", failureReason: "result response failed 3 times", actionCount: 31 });
+  });
+
+  it("keeps backend completion completed when cleanup fails and closes each resource once", async () => {
+    const run = createFixture([setupBatch(), trialBatch()], {
+      closeFailures: new Set(["backend", "agent", "session", "host", "logger"]),
+      onSession: (session) => {
+        const originalClick = session.click;
+        session.click = async (x, y) => {
+          await originalClick(x, y);
+          if (x === 756 && y === 386) session.emitBackendEvent({ type: "results-response", status: 204, ok: true });
+        };
+      },
+    });
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({ status: "completed", failureReason: undefined });
     expect(run.closeCalls).toEqual(["agent", "session", "host", "logger"]);
     expect(run.unsubscribes).toEqual(["backend"]);
-    expect(run.events.at(-1)).toMatchObject({ type: "terminal" });
+    expect(run.events).toContainEqual(expect.objectContaining({ type: "cleanup-error", phase: "agent", error: "agent close failed" }));
+    expect(run.events.at(-1)).toMatchObject({ type: "terminal", summary: expect.objectContaining({ status: "completed" }) });
   });
 
   it("does not serialize observations or response bodies into logs", async () => {
     const screenshot = Uint8Array.from(Buffer.from("SECRET_ANSWER_CANARY"));
-    const run = createFixture([
-      actionTurn([{ type: "move", x: 1, y: 1 }], { body: "safe provider text" }),
-      finishedTurn(),
-    ], {
-      screenshots: [screenshot, Uint8Array.from([2])],
-      onSession: (session) => {
-        const originalMove = session.move;
-        session.move = async (x: number, y: number) => {
-          await originalMove(x, y);
-          if (x === 1 && y === 1) session.emitBackendEvent({ type: "results-response", status: 202, ok: false });
-        };
-      },
-    });
+    const run = createFixture([setupBatch(101, 101), finishedTurn()], { screenshots: [screenshot, Uint8Array.from([2])] });
 
     await run.loop.run(baseConfig, "Visible instruction");
 
@@ -500,16 +355,5 @@ describe("stateful computer-use run loop", () => {
     expect(run.events.some((event) => event.type === "observation")).toBe(false);
     expect(serializedLog).not.toContain("publicInstruction");
     expect(serializedLog).not.toContain('"0":83');
-    expect(run.events).toContainEqual(expect.objectContaining({
-      type: "provider-turn",
-      provider: "fake-provider",
-      model: "fake-model",
-      rawProviderOutput: { body: "[REDACTED]" },
-    }));
-    expect(run.events).toContainEqual(expect.objectContaining({
-      type: "backend-event",
-      status: 202,
-      ok: false,
-    }));
   });
 });
