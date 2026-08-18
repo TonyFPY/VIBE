@@ -1,4 +1,5 @@
 import type { ActionResult, AgentObservation, AgentTurn, ComputerAction } from "../actions/contract";
+import { MAX_BATCH_ACTIONS } from "../actions/policy";
 import type { PerformanceConfig, Viewport } from "../config/types";
 import type { ComputerUseAgent } from "./computer-use-agent";
 import { DefaultGeminiTransport, GeminiHttpError, type GeminiTransport, type GeminiTransportRequest } from "./gemini-transport";
@@ -18,6 +19,14 @@ const COMPUTER_USE_TOOLS = [{
 
 const TRANSIENT_HTTP_STATUSES = new Set([429, 500, 502, 503, 504]);
 const VIEWPORT: Viewport = { width: 1080, height: 675 };
+const PUBLIC_INTERACTION_POLICY = [
+  "Public harness interaction policy:",
+  "Click Start without padding during setup.",
+  "After the task starts, emit at least nine separate moves followed by one final click per trial.",
+  "Use at most 50 actions.",
+  "Use no waits or other excluded controls.",
+  "The harness remains authoritative if you violate this policy.",
+].join(" ");
 
 interface NativeFunctionCall {
   id: string;
@@ -134,13 +143,6 @@ function normalizedPointerAction(
   }
 }
 
-function waitAction(arguments_: Record<string, unknown>, fallbackSeconds?: number): ComputerAction | undefined {
-  if (!hasOnlyKeys(arguments_, fallbackSeconds === undefined ? ["seconds", "intent"] : ["intent"])) return undefined;
-  const seconds = fallbackSeconds ?? (hasFiniteNumber(arguments_, "seconds") ? arguments_.seconds : undefined);
-  if (seconds === undefined || seconds < 0) return undefined;
-  return { type: "wait", milliseconds: Math.min(5_000, Math.floor(seconds * 1_000)) };
-}
-
 function parseComputerAction(call: NativeFunctionCall): { action: ComputerAction; intent?: string } | undefined {
   const intent = typeof call.arguments.intent === "string" ? call.arguments.intent : undefined;
   if (call.name === "click" || call.name === "click_at") {
@@ -149,14 +151,6 @@ function parseComputerAction(call: NativeFunctionCall): { action: ComputerAction
   }
   if (call.name === "move" || call.name === "hover_at") {
     const action = normalizedPointerAction("move", call.arguments);
-    return action ? { action, intent } : undefined;
-  }
-  if (call.name === "wait") {
-    const action = waitAction(call.arguments);
-    return action ? { action, intent } : undefined;
-  }
-  if (call.name === "wait_5_seconds") {
-    const action = waitAction(call.arguments, 5);
     return action ? { action, intent } : undefined;
   }
   return undefined;
@@ -175,7 +169,7 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly random: () => number;
   private previousInteractionId: string | undefined;
-  private pendingCall: PendingFunctionCall | undefined;
+  private pendingCalls: PendingFunctionCall[] = [];
 
   constructor(private readonly options: GeminiComputerUseAgentOptions) {
     this.model = options.model;
@@ -186,44 +180,53 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
   }
 
   async next(observation: AgentObservation, signal: AbortSignal): Promise<AgentTurn> {
-    if (this.pendingCall) {
+    if (this.pendingCalls.length > 0) {
       return blocked(undefined, "Gemini function call result must be reported before the next observation");
     }
     return this.invokeAndInterpret({
       model: this.apiModelId(),
       input: [
-        { type: "text", text: observation.publicInstruction },
+        { type: "text", text: `${observation.publicInstruction}\n\n${PUBLIC_INTERACTION_POLICY}` },
         { type: "image", data: toBase64(observation.screenshot), mime_type: observation.mimeType },
       ],
       tools: COMPUTER_USE_TOOLS,
     }, signal);
   }
 
-  async reportActionResult(observation: AgentObservation, result: ActionResult, signal: AbortSignal): Promise<AgentTurn> {
-    if (!this.pendingCall || !this.previousInteractionId) {
+  async reportActionResults(
+    observation: AgentObservation,
+    results: readonly ActionResult[],
+    signal: AbortSignal,
+  ): Promise<AgentTurn> {
+    if (this.pendingCalls.length === 0 || !this.previousInteractionId) {
       return blocked(undefined, "No Gemini function call is awaiting a result");
     }
-    const pendingCall = this.pendingCall;
-    this.pendingCall = undefined;
+    if (results.length !== this.pendingCalls.length) {
+      return blocked(undefined, "Gemini function call result count does not match the pending batch");
+    }
+    const pendingCalls = this.pendingCalls;
+    this.pendingCalls = [];
     return this.invokeAndInterpret({
       model: this.apiModelId(),
       previous_interaction_id: this.previousInteractionId,
-      input: [{
+      input: pendingCalls.map((pendingCall, index) => ({
         type: "function_result",
         call_id: pendingCall.id,
         name: pendingCall.name,
         result: [
-          { type: "text", text: JSON.stringify({ status: result.status, error: result.error }) },
-          { type: "image", data: toBase64(observation.screenshot), mime_type: observation.mimeType },
+          { type: "text", text: JSON.stringify({ status: results[index].status, error: results[index].error }) },
+          ...(index === pendingCalls.length - 1
+            ? [{ type: "image", data: toBase64(observation.screenshot), mime_type: observation.mimeType }]
+            : []),
         ],
-      }],
+      })),
       tools: COMPUTER_USE_TOOLS,
     }, signal);
   }
 
   async close(): Promise<void> {
     this.previousInteractionId = undefined;
-    this.pendingCall = undefined;
+    this.pendingCalls = [];
   }
 
   private apiModelId(): string {
@@ -274,18 +277,33 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
       this.previousInteractionId = interaction.id;
       return { status: "finished", actions: [], rawProviderOutput };
     }
-    if (functionCallSteps.length !== 1) return blocked(rawProviderOutput, "Gemini returned multiple function calls");
-    const call = nativeFunctionCall(functionCallSteps[0]);
-    if (!call) return blocked(rawProviderOutput, "Gemini returned a malformed function call");
-    const parsed = parseComputerAction(call);
-    if (!parsed) return blocked(rawProviderOutput, "Gemini returned an unsupported or malformed function call");
+    if (functionCallSteps.length > MAX_BATCH_ACTIONS) {
+      return blocked(rawProviderOutput, `Gemini returned more than ${MAX_BATCH_ACTIONS} function calls`);
+    }
+    const calls: NativeFunctionCall[] = [];
+    for (const step of functionCallSteps) {
+      const call = nativeFunctionCall(step);
+      if (!call) return blocked(rawProviderOutput, "Gemini returned a malformed function call");
+      calls.push(call);
+    }
+    const parsed = calls.map(parseComputerAction);
+    if (parsed.some((action) => !action)) {
+      return blocked(rawProviderOutput, "Gemini returned an unsupported or malformed function call");
+    }
+    const actions = parsed as { action: ComputerAction; intent?: string }[];
+    if (actions.slice(0, -1).some(({ action }) => action.type !== "move")) {
+      return blocked(rawProviderOutput, "Gemini function calls before the final call must be moves");
+    }
+    if (actions.at(-1)?.action.type !== "click") {
+      return blocked(rawProviderOutput, "Gemini final function call must be a click");
+    }
     this.previousInteractionId = interaction.id;
-    this.pendingCall = { id: call.id, name: call.name };
+    this.pendingCalls = calls.map(({ id, name }) => ({ id, name }));
     return {
       status: "actions",
-      actions: [parsed.action],
+      actions: actions.map(({ action }) => action),
       rawProviderOutput,
-      providerIntent: parsed.intent,
+      providerIntent: actions[0].intent,
     };
   }
 }

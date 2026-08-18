@@ -4,9 +4,9 @@ export interface ComputerUseAgent {
   readonly provider: string;
   readonly model: string;
   next(observation: AgentObservation, signal: AbortSignal): Promise<AgentTurn>;
-  reportActionResult(
+  reportActionResults(
     observation: AgentObservation,
-    result: ActionResult,
+    results: readonly ActionResult[],
     signal: AbortSignal,
   ): Promise<AgentTurn>;
   close(): Promise<void>;
