@@ -56,7 +56,17 @@ export async function loadSnapshot(inputDir) {
       throw new Error("Each trajectory must have sessionId and trialId");
     }
   }
-  return { manifest, sessions, responses, trajectories: trajectories.map(normalizeTrajectory) };
+  const taskByTrial = new Map(
+    responses
+      .filter((response) => typeof response.task === "string")
+      .map((response) => [`${response.sessionId}\u0000${response.trialId}`, response.task]),
+  );
+  const normalizedTrajectories = trajectories.map(normalizeTrajectory).map((trajectory) => {
+    if (typeof trajectory.task === "string" && trajectory.task.length > 0) return trajectory;
+    const task = taskByTrial.get(`${trajectory.sessionId}\u0000${trajectory.trialId}`);
+    return task ? { ...trajectory, task } : trajectory;
+  });
+  return { manifest, sessions, responses, trajectories: normalizedTrajectories };
 }
 
 function sessionTaskSet(snapshot, sessionId) {

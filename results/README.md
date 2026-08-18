@@ -26,7 +26,9 @@ node results/scripts/export_firestore.mjs \
 `--task` and `--session` are optional; repeat `--session` to export selected
 sessions. The output folder contains `manifest.json`, `sessions.json`,
 `responses.json`, and `trajectories.json`. It contains only serialized data,
-not Firebase credentials or SDK objects.
+not Firebase credentials or SDK objects. Trajectory records are associated
+with their task by matching session and trial IDs, even when the stored
+trajectory document itself has no `task` field.
 
 Build the standalone viewer from that folder:
 

@@ -93,13 +93,24 @@ export function flattenFirestoreSession(sessionId, sessionData, resultDocs, traj
     ...nestedSession,
     sessionId,
   };
+  const taskByTrial = new Map(
+    resultDocs
+      .map((child) => toJsonSafe(child.data))
+      .filter((data) => isPlainObject(data) && typeof data.trialId === "string" && typeof data.task === "string")
+      .map((data) => [data.trialId, data.task]),
+  );
   const flattenChild = (child, key) => {
     const safeData = toJsonSafe(child.data);
-    return {
+    const flattened = {
       sessionId,
       [key]: child.id,
       ...(isPlainObject(safeData) ? safeData : {}),
     };
+    if (key === "trajectoryId" && typeof flattened.task !== "string" && typeof flattened.trialId === "string") {
+      const inferredTask = taskByTrial.get(flattened.trialId);
+      if (inferredTask) flattened.task = inferredTask;
+    }
+    return flattened;
   };
   return {
     session,

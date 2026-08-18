@@ -19,6 +19,7 @@ test("loads and validates an exported snapshot", async () => {
   assert.equal(snapshot.sessions.length, 3);
   assert.equal(snapshot.responses.length, 3);
   assert.equal(snapshot.trajectories.length, 3);
+  assert.equal(snapshot.trajectories[0].task, "visual_similarity");
   assert.deepEqual(snapshot.trajectories[2].points, [
     { elapsedMs: 0, xPx: 540, yPx: 337 },
     { elapsedMs: 1800, xPx: 700, yPx: 300 },

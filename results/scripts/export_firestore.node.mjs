@@ -71,6 +71,16 @@ test("flattens the production nested session metadata", () => {
   assert.equal("session" in result.session, false);
 });
 
+test("infers a trajectory task for task-filtered exports", () => {
+  const result = flattenFirestoreSession(
+    "session-a",
+    { session: { participantType: "agent", model: "google/gemini", runMode: "dev" } },
+    [{ id: "result-a", data: { task: "visual_similarity", trialId: "26" } }],
+    [{ id: "trajectory-a", data: { trialId: "26", points: [] } }],
+  );
+  assert.equal(result.trajectories[0].task, "visual_similarity");
+});
+
 test("writes a portable snapshot with manifest counts", async () => {
   const output = await mkdtemp(join(tmpdir(), "firestore-export-test-"));
   await writeSnapshot({
