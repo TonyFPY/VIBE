@@ -7,7 +7,7 @@ import { DefaultGeminiTransport, GeminiHttpError, type GeminiTransport, type Gem
 const EXCLUDED_PREDEFINED_FUNCTIONS = [
   "double_click", "triple_click", "middle_click", "right_click", "mouse_down", "mouse_up",
   "type", "drag_and_drop", "press_key", "key_down", "key_up", "hotkey", "take_screenshot",
-  "scroll", "go_back", "navigate", "go_forward",
+  "scroll", "go_back", "navigate", "go_forward", "wait",
 ] as const;
 
 const COMPUTER_USE_TOOLS = [{
