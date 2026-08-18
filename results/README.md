@@ -7,3 +7,46 @@ Experiment results are organized by task:
 - `figure/<task>` contains derived images for inspection and analysis.
 
 Results remain in Git as research data and are never deployed in `dist`.
+
+## Firestore export and offline comparison viewer
+
+The export script reads the existing Firestore hierarchy with the Firebase
+Admin SDK and writes a portable snapshot. It uses Application Default
+Credentials, so authenticate with the Google Cloud CLI (or set
+`GOOGLE_APPLICATION_CREDENTIALS`) before running it:
+
+```bash
+gcloud auth application-default login
+node results/scripts/export_firestore.mjs \
+  --project vibe-9d6e5 \
+  --output /tmp/vibe-results \
+  --task visual_similarity
+```
+
+`--task` and `--session` are optional; repeat `--session` to export selected
+sessions. The output folder contains `manifest.json`, `sessions.json`,
+`responses.json`, and `trajectories.json`. It contains only serialized data,
+not Firebase credentials or SDK objects.
+
+Build the standalone viewer from that folder:
+
+```bash
+node results/scripts/build_results_viewer.mjs \
+  --input /tmp/vibe-results \
+  --output /tmp/vibe-results/viewer.html
+open /tmp/vibe-results/viewer.html       # macOS
+```
+
+The HTML is self-contained and works offline. It pairs human and agent
+sessions by `runMode` + `participantId`, keeps unpaired sessions visible, and
+supports task/run/model/participant/trial filters. Each side shows response
+accuracy, reaction-time summaries, response coordinates, and the raw pointer
+trajectory (start and end markers; no smoothing). No DOM, credentials, or
+network access is used by the viewer.
+
+Run the script tests with:
+
+```bash
+node --test results/scripts/export_firestore.node.mjs \
+  results/scripts/build_results_viewer.node.mjs
+```

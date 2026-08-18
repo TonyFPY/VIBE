@@ -54,6 +54,23 @@ test("flattens session and attaches session IDs to child records", () => {
   assert.deepEqual(result.trajectories, [{ sessionId: "session-a", trajectoryId: "trajectory-a", task: "visual_similarity", trialId: "1", points: [] }]);
 });
 
+test("flattens the production nested session metadata", () => {
+  const result = flattenFirestoreSession(
+    "session-a",
+    {
+      session: { participantId: "001", participantType: "agent", model: "google/gemini", runMode: "dev" },
+      resultCount: 1,
+      trajectoryCount: 0,
+    },
+    [],
+    [],
+  );
+  assert.equal(result.session.participantType, "agent");
+  assert.equal(result.session.participantId, "001");
+  assert.equal(result.session.resultCount, 1);
+  assert.equal("session" in result.session, false);
+});
+
 test("writes a portable snapshot with manifest counts", async () => {
   const output = await mkdtemp(join(tmpdir(), "firestore-export-test-"));
   await writeSnapshot({

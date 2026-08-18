@@ -1,0 +1,29 @@
+[
+  {
+    "sessionId": "dev_human_001_20260818T000000Z_human001",
+    "task": "visual_similarity",
+    "trialId": "26",
+    "points": [
+      { "elapsedMs": 0, "xPx": 540, "yPx": 337 },
+      { "elapsedMs": 1200, "xPx": 220, "yPx": 337 }
+    ]
+  },
+  {
+    "sessionId": "dev_agent_001_20260818T000001Z_agent001",
+    "task": "visual_similarity",
+    "trialId": "26",
+    "points": [
+      { "elapsedMs": 0, "xPx": 540, "yPx": 337 },
+      { "elapsedMs": 2400, "xPx": 860, "yPx": 337 }
+    ]
+  },
+  {
+    "sessionId": "ops_agent_002_20260818T000002Z_agent002",
+    "task": "object_matching",
+    "trialId": "5",
+    "points": [
+      [0, 540, 337],
+      [1800, 700, 300]
+    ]
+  }
+]

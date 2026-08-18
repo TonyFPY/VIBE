@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 
-import adminApp from "../../functions/node_modules/firebase-admin/lib/app/index.js";
-import adminFirestore from "../../functions/node_modules/firebase-admin/lib/firestore/index.js";
+const requireFromFunctions = createRequire(new URL("../../functions/package.json", import.meta.url));
+const adminApp = requireFromFunctions("firebase-admin/app");
+const adminFirestore = requireFromFunctions("firebase-admin/firestore");
 
 const { applicationDefault, getApps, initializeApp } = adminApp;
 const { getFirestore } = adminFirestore;
@@ -81,8 +83,14 @@ export function toJsonSafe(value, seen = new WeakSet()) {
 
 export function flattenFirestoreSession(sessionId, sessionData, resultDocs, trajectoryDocs) {
   const safeSession = toJsonSafe(sessionData);
+  const nestedSession = isPlainObject(safeSession) && isPlainObject(safeSession.session)
+    ? safeSession.session
+    : {};
+  const documentFields = isPlainObject(safeSession) ? {...safeSession} : {};
+  delete documentFields.session;
   const session = {
-    ...(isPlainObject(safeSession) ? safeSession : {}),
+    ...documentFields,
+    ...nestedSession,
     sessionId,
   };
   const flattenChild = (child, key) => {

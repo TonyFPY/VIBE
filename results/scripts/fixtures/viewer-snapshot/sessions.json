@@ -1,0 +1,23 @@
+[
+  {
+    "sessionId": "dev_human_001_20260818T000000Z_human001",
+    "participantId": "001",
+    "participantType": "human",
+    "model": "None",
+    "runMode": "dev"
+  },
+  {
+    "sessionId": "dev_agent_001_20260818T000001Z_agent001",
+    "participantId": "001",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash",
+    "runMode": "dev"
+  },
+  {
+    "sessionId": "ops_agent_002_20260818T000002Z_agent002",
+    "participantId": "002",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash",
+    "runMode": "ops"
+  }
+]
