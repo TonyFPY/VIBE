@@ -8,10 +8,60 @@ import { PlaywrightBrowserHost } from "../../src/browser/playwright-controller";
 import type { ActionResult } from "../../src/actions/contract";
 import { parseHarnessConfig } from "../../src/config/load-config";
 import { RunLoop } from "../../src/core/run-loop";
-import type { ComputerUseAgent } from "../../src/providers/computer-use-agent";
+import { GeminiComputerUseAgent } from "../../src/providers/gemini-computer-use";
+import type { GeminiTransport, GeminiTransportRequest } from "../../src/providers/gemini-transport";
 
 const integrationIt = process.env.RUN_PLAYWRIGHT_INTEGRATION === "1" ? it : it.skip;
 const servers: ReturnType<typeof createServer>[] = [];
+const performance = {
+  outputTokens: 128,
+  connectTimeoutMs: 10_000,
+  requestTimeoutMs: 60_000,
+  totalRunTimeoutMs: 30_000,
+  settleDelayMs: 30,
+  maxResponseBytes: 32_768,
+  maxProviderRetries: 0,
+};
+
+function interaction(steps: unknown[], id: string): unknown {
+  return { id, status: "completed", steps };
+}
+
+function functionCall(name: string, arguments_: Record<string, unknown>, id: string): unknown {
+  return { type: "function_call", id, name, arguments: arguments_ };
+}
+
+class FakeGeminiTransport implements GeminiTransport {
+  readonly requests: GeminiTransportRequest[] = [];
+  private readonly responses = [
+    interaction([
+      functionCall("click_visible", { x: 500, y: 500, intent: "start the visible task" }, "setup-click"),
+    ], "interaction-1"),
+    interaction([
+      functionCall("submit_trial_actions", {
+        moves: [
+          { x: 648, y: 518 },
+          { x: 649, y: 519 },
+          { x: 650, y: 520 },
+          { x: 651, y: 521 },
+          { x: 652, y: 522 },
+          { x: 653, y: 523 },
+          { x: 654, y: 524 },
+          { x: 655, y: 525 },
+          { x: 656, y: 526 },
+        ],
+        click: { x: 700, y: 572 },
+      }, "trial-batch"),
+    ], "interaction-2"),
+  ];
+
+  async invoke(request: GeminiTransportRequest): Promise<unknown> {
+    this.requests.push(request);
+    const response = this.responses.shift();
+    if (!response) throw new Error("Fake Gemini transport received an unexpected request");
+    return response;
+  }
+}
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve, reject) => {
@@ -58,29 +108,27 @@ describe("deterministic Playwright run", () => {
       runMode: "dev",
       performance: { settleDelayMs: 30 },
     });
-    const setupActions = [{ type: "click" as const, x: 540, y: 338 }];
-    const trialActions = [
-      ...Array.from({ length: 9 }, (_, index) => ({ type: "move" as const, x: 700 + index, y: 350 + index })),
-      { type: "click" as const, x: 756, y: 386 },
-    ];
     const reportedResults: ActionResult[][] = [];
-    const agent: ComputerUseAgent = {
-      provider: "gemini",
+    const transport = new FakeGeminiTransport();
+    const geminiAgent = new GeminiComputerUseAgent({
+      apiKey: "test-key",
       model: config.model,
-      next: async () => ({
-        status: "actions",
-        actions: setupActions,
-        rawProviderOutput: { actions: setupActions },
-      }),
-      reportActionResults: async (_observation, results) => {
+      performance,
+      transport,
+      now: () => "2026-08-17T20:00:00.000Z",
+      sleep: async () => undefined,
+      random: () => 0,
+    });
+    const agent = {
+      ...geminiAgent,
+      provider: geminiAgent.provider,
+      model: geminiAgent.model,
+      next: geminiAgent.next.bind(geminiAgent),
+      reportActionResults: async (observation: Parameters<typeof geminiAgent.reportActionResults>[0], results: readonly ActionResult[], signal: AbortSignal) => {
         reportedResults.push([...results]);
-        return {
-          status: "actions",
-          actions: trialActions,
-          rawProviderOutput: { actions: trialActions },
-        };
+        return geminiAgent.reportActionResults(observation, results, signal);
       },
-      close: async () => undefined,
+      close: geminiAgent.close.bind(geminiAgent),
     };
     const host = new PlaywrightBrowserHost({ launcher: undefined, settleDelayMs: 30, navigationTimeoutMs: 10_000 });
     const summary = await new RunLoop({
@@ -94,8 +142,11 @@ describe("deterministic Playwright run", () => {
     expect(summary).toMatchObject({ actionCount: 11, observationCount: 2 });
     expect(receivedEvents).toEqual(expect.arrayContaining(["fixation", "move", "response"]));
     expect(resultMethods).toEqual(["POST"]);
-    expect(reportedResults).toEqual([[
-      { action: { type: "click", x: 540, y: 338 }, status: "executed" },
-    ]]);
+    expect(reportedResults).toEqual([[{ action: { type: "click", x: 540, y: 337 }, status: "executed" }]]);
+    const serializedInitialTools = JSON.stringify(transport.requests[0].tools);
+    expect(serializedInitialTools).toContain('"name":"click_visible"');
+    expect(serializedInitialTools).toContain('"name":"submit_trial_actions"');
+    expect(serializedInitialTools).not.toContain('"name":"click"');
+    expect(serializedInitialTools).not.toContain('"name":"move"');
   });
 });

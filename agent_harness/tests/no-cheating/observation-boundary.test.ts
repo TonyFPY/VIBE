@@ -175,15 +175,23 @@ class FakeGeminiTransport implements GeminiTransport {
   constructor() {
     this.responses = [
       interaction([
-        functionCall("click", { x: 250, y: 250, intent: "start visible task" }, "setup-click"),
+        functionCall("click_visible", { x: 250, y: 250, intent: "start visible task" }, "setup-click"),
       ], "interaction-1"),
       interaction([
-        ...Array.from({ length: 9 }, (_, index) => functionCall(
-          "move",
-          { x: 400 + index, y: 300 + index, intent: "inspect visible candidate" },
-          `trial-move-${index + 1}`,
-        )),
-        functionCall("click", { x: 700, y: 500, intent: "submit visible choice" }, "trial-click"),
+        functionCall("submit_trial_actions", {
+          moves: [
+            { x: 400, y: 300 },
+            { x: 401, y: 301 },
+            { x: 402, y: 302 },
+            { x: 403, y: 303 },
+            { x: 404, y: 304 },
+            { x: 405, y: 305 },
+            { x: 406, y: 306 },
+            { x: 407, y: 307 },
+            { x: 408, y: 308 },
+          ],
+          click: { x: 700, y: 500 },
+        }, "trial-batch"),
       ], "interaction-2"),
     ];
   }
@@ -425,14 +433,19 @@ describe("screenshot-only observation boundary", () => {
       ],
     });
     expect(providerRequests[0].input).toHaveLength(2);
+    const serializedInitialTools = JSON.stringify(providerRequests[0].tools);
+    expect(serializedInitialTools).toContain('"name":"click_visible"');
+    expect(serializedInitialTools).toContain('"name":"submit_trial_actions"');
+    expect(serializedInitialTools).not.toContain('"name":"click"');
+    expect(serializedInitialTools).not.toContain('"name":"move"');
     expect(providerRequests[1]).toMatchObject({
       previous_interaction_id: "interaction-1",
       input: [{
         type: "function_result",
         call_id: "setup-click",
-        name: "click",
+        name: "click_visible",
         result: [
-          { type: "text", text: JSON.stringify({ status: "executed", error: undefined }) },
+          { type: "text", text: JSON.stringify([{ status: "executed", error: undefined }]) },
           { type: "image", data: "/9j/FBQ=", mime_type: "image/jpeg" },
         ],
       }],
