@@ -96,7 +96,7 @@ const privateFixture = {
     requestBody: { privateAnswer: canary },
     responseBody: { privateAnswer: canary },
     responseStatus: 202,
-    responseOk: false,
+    responseOk: true,
     failureReason: `backend request failed ${canary}`,
     publicFailureReason: "backend request failed",
   },
@@ -175,10 +175,15 @@ class FakeGeminiTransport implements GeminiTransport {
   constructor() {
     this.responses = [
       interaction([
-        functionCall("click", { x: 250, y: 250, intent: "choose visible candidate" }, "call-1"),
+        functionCall("click", { x: 250, y: 250, intent: "start visible task" }, "setup-click"),
       ], "interaction-1"),
       interaction([
-        functionCall("click", { x: 750, y: 500, intent: "submit visible choice" }, "call-2"),
+        ...Array.from({ length: 9 }, (_, index) => functionCall(
+          "move",
+          { x: 400 + index, y: 300 + index, intent: "inspect visible candidate" },
+          `trial-move-${index + 1}`,
+        )),
+        functionCall("click", { x: 700, y: 500, intent: "submit visible choice" }, "trial-click"),
       ], "interaction-2"),
     ];
   }
@@ -196,7 +201,7 @@ class RecordingAgent implements ComputerUseAgent {
   readonly provider: string;
   readonly model: string;
   readonly observations: AgentObservation[] = [];
-  readonly actionResults: ActionResult[] = [];
+  readonly actionResultBatches: ActionResult[][] = [];
 
   constructor(private readonly delegate: ComputerUseAgent) {
     this.provider = delegate.provider;
@@ -210,17 +215,17 @@ class RecordingAgent implements ComputerUseAgent {
     return this.delegate.next(observation, signal);
   }
 
-  async reportActionResult(
+  async reportActionResults(
     observation: AgentObservation,
-    result: ActionResult,
+    results: readonly ActionResult[],
     signal: AbortSignal,
   ): Promise<AgentTurn> {
     assertObservationShape(observation);
     assertNoStructuralBoundaryLeak("agent received continuation observation", observation);
-    assertNoStructuralBoundaryLeak("agent received action result", result);
+    assertNoStructuralBoundaryLeak("agent received action results", results);
     this.observations.push(observation);
-    this.actionResults.push(result);
-    return this.delegate.reportActionResult(observation, result, signal);
+    this.actionResultBatches.push([...results]);
+    return this.delegate.reportActionResults(observation, results, signal);
   }
 
   async close(): Promise<void> {
@@ -247,7 +252,7 @@ class FakeEvaluatorSessionState implements BrowserHost {
       move: async () => undefined,
       click: async () => {
         this.clickCount += 1;
-        if (this.clickCount === 2) {
+        if (this.clickCount === 3) {
           this.emitPublicBackendEvent(this.evaluatePrivateBackendResponse());
         }
         if (this.clickCount === 4) {
@@ -393,7 +398,7 @@ describe("screenshot-only observation boundary", () => {
       performance,
     });
 
-    await new RunLoop({
+    const summary = await new RunLoop({
       browserHost,
       agent,
       logger,
@@ -410,25 +415,37 @@ describe("screenshot-only observation boundary", () => {
 
     expect(JSON.stringify(evaluator.evaluatorValues)).toContain(canary);
     expect(evaluator.evaluatorValues.length).toBeGreaterThanOrEqual(2);
+    expect(summary).toMatchObject({ status: "completed", actionCount: 11, observationCount: 2 });
     expect(agent.observations).toHaveLength(2);
     expect(providerRequests).toHaveLength(2);
     expect(providerRequests[0]).toMatchObject({
       input: [
-        { type: "text", text: publicInstruction },
+        { type: "text", text: expect.stringContaining(publicInstruction) },
         { type: "image", data: "/9j/FBQ=", mime_type: "image/jpeg" },
       ],
     });
+    expect(providerRequests[0].input).toHaveLength(2);
     expect(providerRequests[1]).toMatchObject({
       previous_interaction_id: "interaction-1",
       input: [{
         type: "function_result",
-        call_id: "call-1",
+        call_id: "setup-click",
         name: "click",
         result: [
           { type: "text", text: JSON.stringify({ status: "executed", error: undefined }) },
           { type: "image", data: "/9j/FBQ=", mime_type: "image/jpeg" },
         ],
       }],
+    });
+    expect(providerRequests[1].input).toHaveLength(1);
+    const continuationResults = providerRequests[1].input as Array<{
+      call_id: string;
+      result: Array<{ type: string; data?: string; mime_type?: string }>;
+    }>;
+    expect(continuationResults.map((result) => result.call_id)).toEqual(["setup-click"]);
+    expect(continuationResults.map((result) => result.result.filter((part) => part.type === "image").length)).toEqual([1]);
+    expect(continuationResults.at(-1)?.result.at(-1)).toMatchObject({
+      type: "image", data: "/9j/FBQ=", mime_type: "image/jpeg",
     });
     expect(openedUrl).toBe("https://example.test/tasks/visual-similarity?participant_id=A001&model=google%2Fgemini-3.7-flash&run=dev");
 
@@ -440,8 +457,11 @@ describe("screenshot-only observation boundary", () => {
     assertNoStructuralBoundaryLeak("continuation request", transport.requests[1]);
     assertBoundaryValue("provider requests", transport.requests);
     assertNoStructuralBoundaryLeak("provider requests", transport.requests);
-    assertBoundaryValue("action results", agent.actionResults);
-    assertNoStructuralBoundaryLeak("action results", agent.actionResults);
+    expect(agent.actionResultBatches).toEqual([[
+      { action: { type: "click", x: 270, y: 168 }, status: "executed" },
+    ]]);
+    assertBoundaryValue("action result batches", agent.actionResultBatches);
+    assertNoStructuralBoundaryLeak("action result batches", agent.actionResultBatches);
     assertBoundaryValue("backend events", deliveredBackendEvents);
     assertNoStructuralBoundaryLeak("backend events", deliveredBackendEvents);
     assertBoundaryValue("persisted logs", persistedLog);
@@ -456,6 +476,8 @@ describe("screenshot-only observation boundary", () => {
       publicInstruction,
     });
     expect(persistedLog).toContain("screenshot-0001");
+    expect(persistedLog).toContain("screenshot-0002");
+    expect(persistedLog).not.toContain("screenshot-0003");
     expect(persistedLog).toContain("rawProviderOutput");
   });
 });

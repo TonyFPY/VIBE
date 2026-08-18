@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PlaywrightBrowserHost } from "../../src/browser/playwright-controller";
+import type { ActionResult } from "../../src/actions/contract";
 import { parseHarnessConfig } from "../../src/config/load-config";
 import { RunLoop } from "../../src/core/run-loop";
 import type { ComputerUseAgent } from "../../src/providers/computer-use-agent";
@@ -57,24 +58,28 @@ describe("deterministic Playwright run", () => {
       runMode: "dev",
       performance: { settleDelayMs: 30 },
     });
-    const actions = [
-      { type: "move" as const, x: 756, y: 386 },
+    const setupActions = [{ type: "click" as const, x: 540, y: 338 }];
+    const trialActions = [
+      ...Array.from({ length: 9 }, (_, index) => ({ type: "move" as const, x: 700 + index, y: 350 + index })),
       { type: "click" as const, x: 756, y: 386 },
-      { type: "wait" as const, milliseconds: 0 },
     ];
+    const reportedResults: ActionResult[][] = [];
     const agent: ComputerUseAgent = {
       provider: "gemini",
       model: config.model,
       next: async () => ({
         status: "actions",
-        actions: [actions.shift() ?? { type: "wait", milliseconds: 0 }],
-        rawProviderOutput: { action: "move" },
+        actions: setupActions,
+        rawProviderOutput: { actions: setupActions },
       }),
-      reportActionResult: async () => ({
-        status: "actions",
-        actions: [actions.shift() ?? { type: "wait", milliseconds: 0 }],
-        rawProviderOutput: { action: "click" },
-      }),
+      reportActionResults: async (_observation, results) => {
+        reportedResults.push([...results]);
+        return {
+          status: "actions",
+          actions: trialActions,
+          rawProviderOutput: { actions: trialActions },
+        };
+      },
       close: async () => undefined,
     };
     const host = new PlaywrightBrowserHost({ launcher: undefined, settleDelayMs: 30, navigationTimeoutMs: 10_000 });
@@ -86,8 +91,11 @@ describe("deterministic Playwright run", () => {
     await host.close();
 
     expect(summary.status).toBe("completed");
+    expect(summary).toMatchObject({ actionCount: 11, observationCount: 2 });
     expect(receivedEvents).toEqual(expect.arrayContaining(["fixation", "move", "response"]));
     expect(resultMethods).toEqual(["POST"]);
-    expect(actions).toEqual([{ type: "wait", milliseconds: 0 }]);
+    expect(reportedResults).toEqual([[
+      { action: { type: "click", x: 540, y: 338 }, status: "executed" },
+    ]]);
   });
 });
