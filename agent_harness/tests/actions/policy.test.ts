@@ -23,17 +23,27 @@ describe("computer action viewport and wait policy", () => {
     expect(validateComputerAction({ type: "wait", milliseconds: 10001 }, viewport)).toMatchObject({ valid: false });
   });
 
-  it("accepts a setup batch with moves followed by a final click", () => {
+  it("accepts a setup batch with exactly one click", () => {
     expect(
       validateComputerActionBatch(
-        [
-          { type: "move", x: 10, y: 20 },
-          { type: "click", x: 30, y: 40 },
-        ],
+        [{ type: "click", x: 30, y: 40 }],
         viewport,
         "setup",
       ),
     ).toEqual({ valid: true });
+  });
+
+  it("rejects a trial-sized setup batch so Start remains a single visible click", () => {
+    const trialSizedBatch = [
+      ...Array.from({ length: MIN_TRIAL_BATCH_ACTIONS - 1 }, (_, index) => ({
+        type: "move" as const,
+        x: index,
+        y: index,
+      })),
+      { type: "click" as const, x: 30, y: 40 },
+    ];
+
+    expect(validateComputerActionBatch(trialSizedBatch, viewport, "setup")).toMatchObject({ valid: false });
   });
 
   it("requires at least ten actions in a trial batch", () => {
@@ -63,8 +73,8 @@ describe("computer action viewport and wait policy", () => {
       y: index,
     })), { type: "click" as const, x: 20, y: 20 }];
 
-    expect(validateComputerActionBatch(actions, viewport, "setup")).toEqual({ valid: true });
-    expect(validateComputerActionBatch([...actions, { type: "click", x: 20, y: 20 }], viewport, "setup"))
+    expect(validateComputerActionBatch(actions, viewport, "trial")).toEqual({ valid: true });
+    expect(validateComputerActionBatch([...actions, { type: "click", x: 20, y: 20 }], viewport, "trial"))
       .toMatchObject({ valid: false });
   });
 

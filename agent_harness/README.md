@@ -120,7 +120,7 @@ to the final grouped result. This is the provider-specific request/response
 mechanism; the provider-neutral `ComputerUseAgent` interface still exposes
 only screenshot observations and coordinate actions.
 
-The `click_visible` setup action is exempt from the trial minimum. Pointer
+The setup phase accepts exactly one action: the `click_visible` click. Pointer
 movement uses non-interpolated Playwright steps by default. Set
 `mouseMoveSteps` at the top level of the JSON configuration to choose a value
 from `1` through `100`:

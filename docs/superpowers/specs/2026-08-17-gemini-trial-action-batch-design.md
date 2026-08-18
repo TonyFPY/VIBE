@@ -27,7 +27,7 @@ The adapter flattens each custom function call into shared pointer actions.
 Trial-response batches therefore contain at least 10 actions: at least nine
 separate `move` actions followed by one final `click`. The total flattened
 batch length is capped at 50 actions. The setup action uses `click_visible` and
-is exempt from the trial minimum. Native pointer calls, `wait`, navigation,
+must contain exactly that one click. Native pointer calls, `wait`, navigation,
 keyboard, scrolling, dragging, and any second click are rejected for this
 condition. The final click is the trial response.
 
@@ -92,12 +92,9 @@ reportActionResults(
 ```
 
 `AgentTurn.actions` already carries an ordered action list. The run loop adds a
-phase-aware batch validator. For the setup batch it checks:
-
-1. one through 50 actions;
-2. every action before the last is `move`;
-3. the last action is `click`;
-4. each CSS-pixel coordinate passes the existing finite, in-viewport policy.
+phase-aware batch validator. For the setup batch it requires exactly one final
+`click` action, which is the flattened `click_visible` setup call. For each
+CSS-pixel coordinate it applies the existing finite, in-viewport policy.
 
 For each trial-response batch it applies the same checks but requires at least
 10 actions. Validation covers the entire batch before any browser action
@@ -160,8 +157,8 @@ Add or update tests for:
 
 - custom setup/trial function parsing in order, including 50-action acceptance
   and 51-action rejection;
-- setup-batch acceptance without a minimum and trial-batch enforcement of the
-  10-action minimum;
+- setup-batch acceptance only for the single setup click and trial-batch
+  enforcement of the 10-action minimum;
 - `move* → click` shape and invalid sequence rejection;
 - one continuation request containing one result per call and one screenshot;
 - batch execution order with no intermediate screenshots;

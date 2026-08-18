@@ -65,6 +65,9 @@ export function validateComputerActionBatch(
   if (actions.length > MAX_BATCH_ACTIONS) {
     return { valid: false, error: `Batch cannot contain more than ${MAX_BATCH_ACTIONS} actions` };
   }
+  if (phase === "setup" && actions.length !== 1) {
+    return { valid: false, error: "Setup batch must contain exactly one click" };
+  }
   if (phase === "trial" && actions.length < MIN_TRIAL_BATCH_ACTIONS) {
     return { valid: false, error: `Trial batch must contain at least ${MIN_TRIAL_BATCH_ACTIONS} actions` };
   }
