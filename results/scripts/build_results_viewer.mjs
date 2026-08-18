@@ -89,7 +89,8 @@ export function pairSessions(snapshot, task) {
   }
   const pairs = [];
   for (const group of groups.values()) {
-    const count = Math.max(group.humans.length, group.agents.length);
+    if (group.humans.length === 0 || group.agents.length === 0) continue;
+    const count = Math.min(group.humans.length, group.agents.length);
     for (let index = 0; index < count; index += 1) {
       pairs.push({
         key: `${group.key}|${index + 1}`,
@@ -169,7 +170,7 @@ export function buildViewerHtml(snapshot) {
     <label>Run mode<select id="run-filter"><option value="all">All</option><option value="dev">dev</option><option value="ops">ops</option></select></label>
     <label>Participant type<select id="participant-filter"><option value="both">Human + agent</option><option value="human">Human only</option><option value="agent">Agent only</option></select></label>
     <label>Model<select id="model-filter"><option value="all">All models</option></select></label>
-    <label>Session pair<select id="pair-filter"></select></label>
+    <label>Participant ID<select id="participant-id-filter"></select></label>
     <label>Trial<select id="trial-filter"><option value="all">All trials</option></select></label>
   </div>
   <div id="comparison">
@@ -200,7 +201,8 @@ export function buildViewerHtml(snapshot) {
     });
     const pairs = [];
     groups.forEach((group) => {
-      const count = Math.max(group.humans.length, group.agents.length);
+      if (group.humans.length === 0 || group.agents.length === 0) return;
+      const count = Math.min(group.humans.length, group.agents.length);
       for (let index = 0; index < count; index += 1) pairs.push({ key: group.key + "|" + (index + 1), human: group.humans[index] || null, agent: group.agents[index] || null });
     });
     return pairs.sort((a, b) => a.key.localeCompare(b.key));
@@ -256,7 +258,7 @@ export function buildViewerHtml(snapshot) {
     return '<svg class="trajectory-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Raw pointer trajectories centered at 0,0"><path d="M' + originX + ' ' + pad + 'V' + (height - pad) + 'M' + pad + ' ' + originY + 'H' + (width - pad) + '" fill="none" stroke="#c8d2ca"/><circle cx="' + originX + '" cy="' + originY + '" r="3" fill="#627067"/><text x="' + (originX + 5) + '" y="' + (originY - 5) + '" fill="#627067" font-size="11">0,0</text>' + paths + '</svg>';
   }
   function panel(session, task, selectedTrial, label) {
-    if (!session) return '<section class="panel unpaired"><h2>' + label + '</h2><div class="empty">Unpaired — no matching session</div></section>';
+    if (!session) return "";
     const rows = responseRows(session.sessionId, task).filter((row) => selectedTrial === "all" || row.trialId === selectedTrial);
     const trajectories = trajectoryRows(session.sessionId, task).filter((row) => selectedTrial === "all" || row.trialId === selectedTrial);
     const acc = accuracy(rows), rt = mean(rows, "reactionTimeMs");
@@ -277,8 +279,12 @@ export function buildViewerHtml(snapshot) {
       const candidate = pair.human || pair.agent;
       return candidate && (run === "all" || candidate.runMode === run) && (model === "all" || (pair.agent && pair.agent.model === model));
     });
-    const pairIndex = Math.min(Number($("pair-filter").value || 0), Math.max(0, pairs.length - 1));
-    const pair = pairs[pairIndex] || { human: null, agent: null };
+    const pairIndex = Math.min(Number($("participant-id-filter").value || 0), Math.max(0, pairs.length - 1));
+    const pair = pairs[pairIndex];
+    if (!pair) {
+      $("comparison").innerHTML = "";
+      return;
+    }
     const selectedTrial = $("trial-filter").value;
     const html = [];
     if (participant !== "agent") html.push(panel(pair.human, task, selectedTrial, "Human"));
@@ -288,8 +294,8 @@ export function buildViewerHtml(snapshot) {
   function refreshOptions() {
     const task = $("task-filter").value;
     const pairs = pairsFor(task);
-    $("pair-filter").innerHTML = pairs.map((pair, index) => '<option value="' + index + '">' + esc(pair.key) + (pair.human && pair.agent ? " · paired" : " · unpaired") + '</option>').join("") || '<option value="0">No sessions</option>';
-    const currentPair = pairs[Math.min(Number($("pair-filter").value || 0), Math.max(0, pairs.length - 1))];
+    $("participant-id-filter").innerHTML = pairs.map((pair, index) => '<option value="' + index + '">' + esc((pair.human || pair.agent).participantId || "") + '</option>').join("");
+    const currentPair = pairs[Math.min(Number($("participant-id-filter").value || 0), Math.max(0, pairs.length - 1))];
     const ids = currentPair ? [...new Set([...(currentPair.human ? responseRows(currentPair.human.sessionId, task) : []), ...(currentPair.agent ? responseRows(currentPair.agent.sessionId, task) : [])].map((row) => row.trialId))].sort() : [];
     $("trial-filter").innerHTML = '<option value="all">All trials</option>' + ids.map((id) => '<option value="' + esc(id) + '">' + esc(id) + '</option>').join("");
     render();
@@ -297,7 +303,7 @@ export function buildViewerHtml(snapshot) {
   $("export-meta").textContent = "Exported " + (DATA.manifest.exportedAt || "unknown") + " · " + (DATA.manifest.counts?.sessions || 0) + " sessions · " + (DATA.manifest.counts?.responses || 0) + " responses · " + (DATA.manifest.counts?.trajectories || 0) + " trajectories";
   $("task-filter").innerHTML = taskSet.map((task) => '<option value="' + esc(task) + '">' + esc(task.replaceAll("_", " ")) + '</option>').join("");
   $("model-filter").innerHTML += modelSet.map((model) => '<option value="' + esc(model) + '">' + esc(model) + '</option>').join("");
-  ["task-filter", "run-filter", "participant-filter", "model-filter", "pair-filter", "trial-filter"].forEach((id) => $(id).addEventListener("change", () => id === "task-filter" || id === "run-filter" || id === "model-filter" ? refreshOptions() : render()));
+  ["task-filter", "run-filter", "participant-filter", "model-filter", "participant-id-filter", "trial-filter"].forEach((id) => $(id).addEventListener("change", () => id === "task-filter" || id === "run-filter" || id === "model-filter" ? refreshOptions() : render()));
   refreshOptions();
 })();
 </script>
