@@ -8,7 +8,7 @@ import test from "node:test";
 import {
   buildViewerHtml,
   loadSnapshot,
-  pairSessions,
+  participantSessions,
   writeViewer,
 } from "./build_results_viewer.mjs";
 
@@ -26,12 +26,13 @@ test("loads and validates an exported snapshot", async () => {
   ]);
 });
 
-test("returns only participant IDs with both human and agent sessions", async () => {
+test("lists human and agent participant sessions independently", async () => {
   const snapshot = await loadSnapshot(fixtureDir);
-  const pairs = pairSessions(snapshot);
-  assert.equal(pairs.length, 1);
-  assert.equal(pairs[0].human.sessionId.startsWith("dev_human"), true);
-  assert.equal(pairs[0].agent.sessionId.startsWith("dev_agent"), true);
+  const humans = participantSessions(snapshot, undefined, "human");
+  const agents = participantSessions(snapshot, undefined, "agent");
+  assert.equal(humans.length, 1);
+  assert.equal(agents.length, 2);
+  assert.equal(agents.some((session) => session.sessionId.startsWith("ops_agent")), true);
 });
 
 test("embeds escaped data and comparison controls in standalone HTML", async () => {
@@ -41,10 +42,12 @@ test("embeds escaped data and comparison controls in standalone HTML", async () 
   assert.match(html, /id="human-panel"/);
   assert.match(html, /id="agent-panel"/);
   assert.match(html, /trajectory-svg/);
-  assert.match(html, /Participant ID/);
+  assert.match(html, /Human participant ID/);
+  assert.match(html, /Agent participant ID/);
   assert.equal(html.includes("Session pair"), false);
   assert.equal(html.includes("Unpaired"), false);
-  assert.match(html, /participant-id-filter/);
+  assert.match(html, /human-id-filter/);
+  assert.match(html, /agent-id-filter/);
   assert.equal(html.includes("human correct / RT"), false);
   assert.match(html, /originX/);
   assert.equal(html.includes("</script><script>alert"), false);

@@ -73,33 +73,11 @@ function sessionTaskSet(snapshot, sessionId) {
   return new Set(snapshot.responses.filter((response) => response.sessionId === sessionId).map((response) => response.task));
 }
 
-function pairKey(session) {
-  return [session.runMode ?? "", session.participantId ?? ""].join("|");
-}
-
-export function pairSessions(snapshot, task) {
-  const sessions = snapshot.sessions.filter((session) => !task || sessionTaskSet(snapshot, session.sessionId).has(task));
-  const groups = new Map();
-  for (const session of sessions) {
-    const key = pairKey(session);
-    if (!groups.has(key)) groups.set(key, { key, humans: [], agents: [] });
-    const group = groups.get(key);
-    if (session.participantType === "human") group.humans.push(session);
-    if (session.participantType === "agent") group.agents.push(session);
-  }
-  const pairs = [];
-  for (const group of groups.values()) {
-    if (group.humans.length === 0 || group.agents.length === 0) continue;
-    const count = Math.min(group.humans.length, group.agents.length);
-    for (let index = 0; index < count; index += 1) {
-      pairs.push({
-        key: `${group.key}|${index + 1}`,
-        human: group.humans[index] ?? null,
-        agent: group.agents[index] ?? null,
-      });
-    }
-  }
-  return pairs.sort((left, right) => left.key.localeCompare(right.key));
+export function participantSessions(snapshot, task, participantType) {
+  return snapshot.sessions
+    .filter((session) => (!task || sessionTaskSet(snapshot, session.sessionId).has(task))
+      && (!participantType || session.participantType === participantType))
+    .sort((left, right) => left.sessionId.localeCompare(right.sessionId));
 }
 
 function escapeHtml(value) {
@@ -143,7 +121,6 @@ export function buildViewerHtml(snapshot) {
     .panel { min-width:0; border:1px solid var(--line); padding:14px; }
     .panel.human { border-top:3px solid var(--human); }
     .panel.agent { border-top:3px solid var(--agent); }
-    .panel.unpaired { border-top-color:#8d9890; }
     .meta { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:9px; margin:12px 0; }
     .metric { padding:9px; background:var(--surface); border:1px solid var(--line); }
     .metric b { display:block; font-size:18px; font-weight:600; }
@@ -170,7 +147,8 @@ export function buildViewerHtml(snapshot) {
     <label>Run mode<select id="run-filter"><option value="all">All</option><option value="dev">dev</option><option value="ops">ops</option></select></label>
     <label>Participant type<select id="participant-filter"><option value="both">Human + agent</option><option value="human">Human only</option><option value="agent">Agent only</option></select></label>
     <label>Model<select id="model-filter"><option value="all">All models</option></select></label>
-    <label>Participant ID<select id="participant-id-filter"></select></label>
+    <label>Human participant ID<select id="human-id-filter"></select></label>
+    <label>Agent participant ID<select id="agent-id-filter"></select></label>
     <label>Trial<select id="trial-filter"><option value="all">All trials</option></select></label>
   </div>
   <div id="comparison">
@@ -189,23 +167,23 @@ export function buildViewerHtml(snapshot) {
   const responseRows = (sessionId, task) => DATA.responses.filter((row) => row.sessionId === sessionId && (!task || row.task === task));
   const trajectoryRows = (sessionId, task) => DATA.trajectories.filter((row) => row.sessionId === sessionId && (!task || row.task === task));
   const taskForSession = (sessionId, task) => responseRows(sessionId, task).length > 0;
-  const keyFor = (session) => [session.runMode || "", session.participantId || ""].join("|");
-  function pairsFor(task) {
-    const groups = new Map();
-    DATA.sessions.filter((session) => taskForSession(session.sessionId, task)).forEach((session) => {
-      const key = keyFor(session);
-      if (!groups.has(key)) groups.set(key, { key, humans: [], agents: [] });
-      const group = groups.get(key);
-      if (session.participantType === "human") group.humans.push(session);
-      if (session.participantType === "agent") group.agents.push(session);
+  function sessionsFor(task, participantType) {
+    const run = $("run-filter").value;
+    const model = $("model-filter").value;
+    return DATA.sessions
+      .filter((session) => taskForSession(session.sessionId, task)
+        && session.participantType === participantType
+        && (run === "all" || session.runMode === run)
+        && (participantType !== "agent" || model === "all" || session.model === model))
+      .sort((a, b) => a.sessionId.localeCompare(b.sessionId));
+  }
+  function participantOptions(task, participantType) {
+    const seen = new Set();
+    return sessionsFor(task, participantType).filter((session) => {
+      if (seen.has(session.participantId)) return false;
+      seen.add(session.participantId);
+      return true;
     });
-    const pairs = [];
-    groups.forEach((group) => {
-      if (group.humans.length === 0 || group.agents.length === 0) return;
-      const count = Math.min(group.humans.length, group.agents.length);
-      for (let index = 0; index < count; index += 1) pairs.push({ key: group.key + "|" + (index + 1), human: group.humans[index] || null, agent: group.agents[index] || null });
-    });
-    return pairs.sort((a, b) => a.key.localeCompare(b.key));
   }
   const esc = (value) => String(value == null ? "" : value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
   const number = (value) => typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -272,38 +250,34 @@ export function buildViewerHtml(snapshot) {
   }
   function render() {
     const task = $("task-filter").value;
-    const run = $("run-filter").value;
     const participant = $("participant-filter").value;
-    const model = $("model-filter").value;
-    const pairs = pairsFor(task).filter((pair) => {
-      const candidate = pair.human || pair.agent;
-      return candidate && (run === "all" || candidate.runMode === run) && (model === "all" || (pair.agent && pair.agent.model === model));
-    });
-    const pairIndex = Math.min(Number($("participant-id-filter").value || 0), Math.max(0, pairs.length - 1));
-    const pair = pairs[pairIndex];
-    if (!pair) {
+    const human = byId.get($("human-id-filter").value) || null;
+    const agent = byId.get($("agent-id-filter").value) || null;
+    const selectedTrial = $("trial-filter").value;
+    const html = [];
+    if (participant !== "agent") html.push(panel(human, task, selectedTrial, "Human"));
+    if (participant !== "human") html.push(panel(agent, task, selectedTrial, "Agent"));
+    if (html.every((content) => content === "")) {
       $("comparison").innerHTML = "";
       return;
     }
-    const selectedTrial = $("trial-filter").value;
-    const html = [];
-    if (participant !== "agent") html.push(panel(pair.human, task, selectedTrial, "Human"));
-    if (participant !== "human") html.push(panel(pair.agent, task, selectedTrial, "Agent"));
     $("comparison").innerHTML = '<div class="legend"><span><i class="dot" style="background:#277c63"></i>human</span><span><i class="dot" style="background:#a45726"></i>agent</span></div><div class="compare">' + html.join("") + '</div>';
   }
   function refreshOptions() {
     const task = $("task-filter").value;
-    const pairs = pairsFor(task);
-    $("participant-id-filter").innerHTML = pairs.map((pair, index) => '<option value="' + index + '">' + esc((pair.human || pair.agent).participantId || "") + '</option>').join("");
-    const currentPair = pairs[Math.min(Number($("participant-id-filter").value || 0), Math.max(0, pairs.length - 1))];
-    const ids = currentPair ? [...new Set([...(currentPair.human ? responseRows(currentPair.human.sessionId, task) : []), ...(currentPair.agent ? responseRows(currentPair.agent.sessionId, task) : [])].map((row) => row.trialId))].sort() : [];
+    const humanOptions = participantOptions(task, "human");
+    const agentOptions = participantOptions(task, "agent");
+    $("human-id-filter").innerHTML = humanOptions.map((session) => '<option value="' + esc(session.sessionId) + '">' + esc(session.participantId || "") + '</option>').join("");
+    $("agent-id-filter").innerHTML = agentOptions.map((session) => '<option value="' + esc(session.sessionId) + '">' + esc(session.participantId || "") + '</option>').join("");
+    const human = humanOptions[0], agent = agentOptions[0];
+    const ids = [...new Set([...(human ? responseRows(human.sessionId, task) : []), ...(agent ? responseRows(agent.sessionId, task) : [])].map((row) => row.trialId))].sort();
     $("trial-filter").innerHTML = '<option value="all">All trials</option>' + ids.map((id) => '<option value="' + esc(id) + '">' + esc(id) + '</option>').join("");
     render();
   }
   $("export-meta").textContent = "Exported " + (DATA.manifest.exportedAt || "unknown") + " · " + (DATA.manifest.counts?.sessions || 0) + " sessions · " + (DATA.manifest.counts?.responses || 0) + " responses · " + (DATA.manifest.counts?.trajectories || 0) + " trajectories";
   $("task-filter").innerHTML = taskSet.map((task) => '<option value="' + esc(task) + '">' + esc(task.replaceAll("_", " ")) + '</option>').join("");
   $("model-filter").innerHTML += modelSet.map((model) => '<option value="' + esc(model) + '">' + esc(model) + '</option>').join("");
-  ["task-filter", "run-filter", "participant-filter", "model-filter", "participant-id-filter", "trial-filter"].forEach((id) => $(id).addEventListener("change", () => id === "task-filter" || id === "run-filter" || id === "model-filter" ? refreshOptions() : render()));
+  ["task-filter", "run-filter", "participant-filter", "model-filter", "human-id-filter", "agent-id-filter", "trial-filter"].forEach((id) => $(id).addEventListener("change", () => id === "task-filter" || id === "run-filter" || id === "model-filter" ? refreshOptions() : render()));
   refreshOptions();
 })();
 </script>
