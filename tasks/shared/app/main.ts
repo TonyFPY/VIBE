@@ -62,7 +62,7 @@ async function finish(runMode: RunMode): Promise<void> {
 }
 
 function timelineFor(phase: "training" | "testing", trials: DreamSimTrial[]) {
-  const buffer = new TripletPreloadBuffer(trials, 5);
+  const buffer = new TripletPreloadBuffer(trials, 3);
   return trials.map((trial, index) => ({
     type: VisualSimilarityPlugin,
     trial,

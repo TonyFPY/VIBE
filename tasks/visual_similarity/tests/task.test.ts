@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   pointerTupleAtCross,
   shouldSamplePointer,
   parseDreamSimCsv,
+  TripletPreloadBuffer,
   scoreResponse,
   selectRunPhases,
   splitExperimentPhases,
@@ -17,6 +18,36 @@ import { trainingAlignmentFeedback } from "../task";
 import { calculateReactionTimeMs } from "../../shared/experiment/geometry";
 
 describe("visual similarity task", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("prefetches the current trial and exactly three future trials", () => {
+    class FakeImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      decode = () => Promise.resolve();
+      src = "";
+    }
+    const images: FakeImage[] = [];
+    const ImageConstructor = class extends FakeImage {
+      constructor() {
+        super();
+        images.push(this);
+      }
+    };
+    vi.stubGlobal("Image", ImageConstructor);
+    const trials = parseDreamSimCsv(
+      "id,left_vote,right_vote,ref_path,left_path,right_path\n" +
+        Array.from({ length: 6 }, (_, index) => `${index + 1},1,0,ref/${index}.png,left/${index}.png,right/${index}.png`).join("\n"),
+    );
+    const buffer = new TripletPreloadBuffer(trials);
+
+    void buffer.prepare(0);
+
+    expect(images).toHaveLength(12);
+  });
+
   it("uses the first three rows as training and the rest as testing", () => {
     const rows = parseDreamSimCsv(
       "id,left_vote,right_vote,ref_path,left_path,right_path\n" +

@@ -1,4 +1,5 @@
 import type { Side } from "../shared/experiment/types";
+import { preloadImage } from "../shared/experiment/image-preload";
 import {
   isTrialViewportSupported,
   pointerTupleAtCross,
@@ -81,17 +82,12 @@ export const toPublicTrial = (trial: DreamSimTrial): PublicTrial => ({
 });
 
 export async function preloadTriplet(trial: DreamSimTrial): Promise<void> {
-  await Promise.all([trial.referenceImage, trial.leftCandidate, trial.rightCandidate].map((source) => new Promise<void>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => image.decode().then(resolve, reject);
-    image.onerror = () => reject(new Error(`Unable to load image`));
-    image.src = source;
-  })));
+  await Promise.all([trial.referenceImage, trial.leftCandidate, trial.rightCandidate].map(preloadImage));
 }
 
 export class TripletPreloadBuffer {
   private readonly jobs = new Map<number, Promise<void>>();
-  constructor(private readonly trials: DreamSimTrial[], private readonly size = 5) {}
+  constructor(private readonly trials: DreamSimTrial[], private readonly size = 3) {}
   prepare(index: number): Promise<void> {
     for (let next = index; next <= index + this.size && next < this.trials.length; next += 1) {
       if (!this.jobs.has(next)) this.jobs.set(next, preloadTriplet(this.trials[next]));

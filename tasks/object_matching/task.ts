@@ -1,4 +1,5 @@
 import { isTrialViewportSupported } from "../shared/experiment/geometry";
+import { preloadImage } from "../shared/experiment/image-preload";
 
 export interface ObjectMatchingTrial {
   id: string;
@@ -106,15 +107,6 @@ export const toPublicObjectMatchingTrial = (trial: ObjectMatchingTrial): PublicO
   referenceImage: trial.referenceImage,
   candidates: trial.candidates,
 });
-
-function preloadImage(source: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => image.decode().then(resolve, reject);
-    image.onerror = () => reject(new Error("Unable to load image"));
-    image.src = source;
-  });
-}
 
 export function preloadObjectMatchingTrial(trial: ObjectMatchingTrial): Promise<void> {
   return Promise.all([trial.referenceImage, ...trial.candidates].map(preloadImage)).then(() => undefined);
