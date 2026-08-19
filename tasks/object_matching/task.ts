@@ -114,13 +114,28 @@ export function preloadObjectMatchingTrial(trial: ObjectMatchingTrial): Promise<
 
 export class ObjectMatchingPreloadBuffer {
   private readonly jobs = new Map<number, Promise<void>>();
+  private prefetchChain = Promise.resolve();
 
   constructor(private readonly trials: ObjectMatchingTrial[], private readonly size = 3) {}
 
+  private ensure(index: number): Promise<void> {
+    if (!this.jobs.has(index)) this.jobs.set(index, preloadObjectMatchingTrial(this.trials[index]));
+    return this.jobs.get(index)!;
+  }
+
   prepare(index: number): Promise<void> {
-    for (let next = index; next <= index + this.size && next < this.trials.length; next += 1) {
-      if (!this.jobs.has(next)) this.jobs.set(next, preloadObjectMatchingTrial(this.trials[next]));
-    }
-    return this.jobs.get(index) ?? Promise.resolve();
+    const current = this.ensure(index);
+    void current.then(() => {
+      this.prefetchChain = this.prefetchChain.then(async () => {
+        for (let next = index + 1; next <= index + this.size && next < this.trials.length; next += 1) {
+          try {
+            await this.ensure(next);
+          } catch {
+            // A failed lookahead is retried if that trial becomes current.
+          }
+        }
+      });
+    }, () => undefined);
+    return current;
   }
 }

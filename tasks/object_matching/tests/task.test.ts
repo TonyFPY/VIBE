@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   OBJECT_IMAGE_SIZE,
@@ -12,6 +12,7 @@ import {
   splitObjectMatchingPhases,
   toPublicObjectMatchingTrial,
   objectMatchingFeedback,
+  ObjectMatchingPreloadBuffer,
 } from "../task";
 import { ObjectMatchingPlugin } from "../renderer";
 import { isRecordedPhase } from "../../shared/experiment/types";
@@ -24,6 +25,39 @@ const row = (id: number, correctLabel = 4) => [
 ].join(",");
 
 describe("object matching task", () => {
+  it("prioritizes the current trial before prefetching future trials", async () => {
+    class FakeImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      decode = () => Promise.resolve();
+      src = "";
+
+      finishLoad(): void {
+        this.onload?.();
+      }
+    }
+    const images: FakeImage[] = [];
+    const ImageConstructor = class extends FakeImage {
+      constructor() {
+        super();
+        images.push(this);
+      }
+    };
+    vi.stubGlobal("Image", ImageConstructor);
+    const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const trials = parseObjectMatchingCsv(`${header}\n${Array.from({ length: 5 }, (_, index) => row(index)).join("\n")}`);
+    const buffer = new ObjectMatchingPreloadBuffer(trials);
+
+    const current = buffer.prepare(0);
+
+    expect(images).toHaveLength(9);
+    images.slice(0, 9).forEach((image) => image.finishLoad());
+    await current;
+    await flush();
+    expect(images).toHaveLength(18);
+    vi.unstubAllGlobals();
+  });
+
   it("parses the eight candidate paths and preserves the private correct label", () => {
     const [trial] = parseObjectMatchingCsv(`${header}\n${row(7, 6)}`);
 

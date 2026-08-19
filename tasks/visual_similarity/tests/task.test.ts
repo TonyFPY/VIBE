@@ -22,12 +22,16 @@ describe("visual similarity task", () => {
     vi.unstubAllGlobals();
   });
 
-  it("prefetches the current trial and exactly three future trials", () => {
+  it("prioritizes the current trial before prefetching exactly three future trials", async () => {
     class FakeImage {
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
       decode = () => Promise.resolve();
       src = "";
+
+      finishLoad(): void {
+        this.onload?.();
+      }
     }
     const images: FakeImage[] = [];
     const ImageConstructor = class extends FakeImage {
@@ -37,14 +41,26 @@ describe("visual similarity task", () => {
       }
     };
     vi.stubGlobal("Image", ImageConstructor);
+    const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
     const trials = parseDreamSimCsv(
       "id,left_vote,right_vote,ref_path,left_path,right_path\n" +
         Array.from({ length: 6 }, (_, index) => `${index + 1},1,0,ref/${index}.png,left/${index}.png,right/${index}.png`).join("\n"),
     );
     const buffer = new TripletPreloadBuffer(trials);
 
-    void buffer.prepare(0);
+    const current = buffer.prepare(0);
 
+    expect(images).toHaveLength(3);
+    images.forEach((image) => image.finishLoad());
+    await current;
+    await flush();
+
+    expect(images).toHaveLength(6);
+    images.slice(3, 6).forEach((image) => image.finishLoad());
+    await flush();
+    expect(images).toHaveLength(9);
+    images.slice(6, 9).forEach((image) => image.finishLoad());
+    await flush();
     expect(images).toHaveLength(12);
   });
 
