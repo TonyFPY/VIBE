@@ -12,8 +12,7 @@ import { RunLogger } from "../../src/logging/run-logger";
 import { publicInstructionForTask } from "../../src/prompts/public-instruction";
 import { GeminiComputerUseAgent } from "../../src/providers/gemini-computer-use";
 
-it("performs at least one public action through Gemini Computer Use", async () => {
-  if (process.env.RUN_GEMINI_SMOKE !== "1") throw new Error("RUN_GEMINI_SMOKE=1 is required");
+it.skipIf(process.env.RUN_GEMINI_SMOKE !== "1")("performs at least one public action through Gemini Computer Use", async () => {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   const taskUrl = process.env.AGENT_TASK_URL?.trim();
   const modelId = process.env.AGENT_MODEL?.trim();

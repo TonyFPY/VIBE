@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTaskUrl, parseHarnessConfig } from "../../src/config/load-config";
+import { buildTaskUrl, buildTaskUrlFromHost, parseHarnessConfig } from "../../src/config/load-config";
 import { resolveModelSpec } from "../../src/config/model-catalog";
 
 const minimumConfig = {
@@ -17,20 +17,48 @@ describe("harness configuration", () => {
     );
   });
 
+  it("builds a task URL from a host and task name", () => {
+    expect(buildTaskUrlFromHost({
+      host: "https://vibe-9d6e5.web.app/",
+      task: "object-matching",
+      participantId: "1",
+      model: "google/gemini-3.7-flash",
+      runMode: "ops",
+    })).toBe(
+      "https://vibe-9d6e5.web.app/tasks/object-matching?participant_id=A1&model=google%2Fgemini-3.7-flash&run=ops",
+    );
+    expect(() => buildTaskUrlFromHost({
+      host: "https://vibe-9d6e5.web.app/base",
+      task: "visual-similarity",
+      participantId: "1",
+      model: "google/gemini-3.7-flash",
+      runMode: "dev",
+    })).toThrow("host must not include a path");
+  });
+
+  it("accepts a single-digit participant ID and preserves it in the agent URL", () => {
+    const config = { ...minimumConfig, participantId: "1" };
+    expect(parseHarnessConfig(config).participantId).toBe("1");
+    expect(buildTaskUrl(config)).toBe(
+      "https://vibe-9d6e5.web.app/tasks/visual-similarity?participant_id=A1&model=google%2Fgemini-3.7-flash&run=dev",
+    );
+  });
+
   it("applies bounded performance and viewport defaults", () => {
     expect(parseHarnessConfig(minimumConfig)).toMatchObject({
       viewport: { width: 1080, height: 675 },
       screenshotQuality: 90,
       mouseMoveSteps: 1,
+      mouseMoveDelayMs: 20,
       maxSteps: 256,
       maxInvalidActions: 3,
       performance: {
         outputTokens: 2048,
         connectTimeoutMs: 10_000,
-        requestTimeoutMs: 60_000,
+        requestTimeoutMs: 120_000,
         totalRunTimeoutMs: 1_800_000,
-        settleDelayMs: 100,
-        maxResponseBytes: 32_768,
+        settleDelayMs: 2_000,
+        maxResponseBytes: 131_072,
         maxProviderRetries: 2,
       },
     });
@@ -40,6 +68,13 @@ describe("harness configuration", () => {
     expect(parseHarnessConfig({ ...minimumConfig, mouseMoveSteps: 37 }).mouseMoveSteps).toBe(37);
     expect(() => parseHarnessConfig({ ...minimumConfig, mouseMoveSteps: 0 })).toThrow("mouseMoveSteps");
     expect(() => parseHarnessConfig({ ...minimumConfig, mouseMoveSteps: 101 })).toThrow("mouseMoveSteps");
+  });
+
+  it("accepts bounded mouse movement delay", () => {
+    expect(parseHarnessConfig({ ...minimumConfig, mouseMoveDelayMs: 35 })).toMatchObject({ mouseMoveDelayMs: 35 });
+    expect(parseHarnessConfig({ ...minimumConfig, mouseMoveDelayMs: 0 })).toMatchObject({ mouseMoveDelayMs: 0 });
+    expect(() => parseHarnessConfig({ ...minimumConfig, mouseMoveDelayMs: -1 })).toThrow("mouseMoveDelayMs");
+    expect(() => parseHarnessConfig({ ...minimumConfig, mouseMoveDelayMs: 1001 })).toThrow("mouseMoveDelayMs");
   });
 
   it("accepts the catalogued Gemini computer-use model", () => {

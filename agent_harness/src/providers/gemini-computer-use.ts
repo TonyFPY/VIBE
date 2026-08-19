@@ -17,6 +17,20 @@ const COMPUTER_USE_TOOL = {
   excluded_predefined_functions: EXCLUDED_PREDEFINED_FUNCTIONS,
 } as const;
 
+const NORMALIZED_X_SCHEMA = {
+  type: "integer",
+  minimum: 0,
+  maximum: 999,
+  description: "Integer normalized x coordinate in [0,999], not CSS pixels.",
+} as const;
+
+const NORMALIZED_Y_SCHEMA = {
+  type: "integer",
+  minimum: 0,
+  maximum: 999,
+  description: "Integer normalized y coordinate in [0,999], not CSS pixels.",
+} as const;
+
 const CUSTOM_POINTER_TOOLS = [
   {
     type: "function",
@@ -25,8 +39,8 @@ const CUSTOM_POINTER_TOOLS = [
     parameters: {
       type: "object",
       properties: {
-        x: { type: "integer" },
-        y: { type: "integer" },
+        x: NORMALIZED_X_SCHEMA,
+        y: NORMALIZED_Y_SCHEMA,
         intent: { type: "string" },
       },
       required: ["x", "y", "intent"],
@@ -46,14 +60,14 @@ const CUSTOM_POINTER_TOOLS = [
           maxItems: MAX_TRIAL_MOVES,
           items: {
             type: "object",
-            properties: { x: { type: "integer" }, y: { type: "integer" } },
+            properties: { x: NORMALIZED_X_SCHEMA, y: NORMALIZED_Y_SCHEMA },
             required: ["x", "y"],
             additionalProperties: false,
           },
         },
         click: {
           type: "object",
-          properties: { x: { type: "integer" }, y: { type: "integer" } },
+          properties: { x: NORMALIZED_X_SCHEMA, y: NORMALIZED_Y_SCHEMA },
           required: ["x", "y"],
           additionalProperties: false,
         },
@@ -71,8 +85,10 @@ const VIEWPORT: Viewport = { width: 1080, height: 675 };
 const PUBLIC_INTERACTION_POLICY = [
   "Public harness interaction policy:",
   "Use click_visible for one visible setup or navigation click, including Start or Continue.",
+  "Use the native wait_5_seconds action only when the visible screen says it is preparing or loading; it is not a trial response.",
   `On trial-response screens, use submit_trial_actions with at least ${MIN_TRIAL_MOVES} separate moves followed by one final click.`,
-  "Use no native pointer controls, waits, or other excluded controls.",
+  "For every custom pointer coordinate, provide an integer normalized x/y value from 0 through 999; these are not CSS pixels.",
+  "Use no native pointer controls or other excluded controls.",
   "The harness remains authoritative if you violate this policy.",
 ].join(" ");
 
@@ -172,6 +188,10 @@ function blocked(rawProviderOutput: unknown, failureReason: string): AgentTurn {
   return { status: "blocked", actions: [], rawProviderOutput, failureReason };
 }
 
+function recoverable(rawProviderOutput: unknown, failureReason: string): AgentTurn {
+  return { status: "recoverable", actions: [], rawProviderOutput, failureReason };
+}
+
 export function normalizeGeminiCoordinate(value: number, axis: "x" | "y", viewport: Viewport): number {
   if (!Number.isFinite(value) || value < 0 || value > 999) {
     throw new Error("Gemini coordinates must be finite normalized values from 0 through 999");
@@ -204,6 +224,11 @@ function parseComputerAction(call: NativeFunctionCall): {
   actionBatchType: AgentActionBatchType;
   intent?: string;
 } | undefined {
+  if (call.name === "wait_5_seconds") {
+    return hasOnlyKeys(call.arguments, [])
+      ? { actions: [{ type: "wait", milliseconds: 5000 }], actionBatchType: "wait" }
+      : undefined;
+  }
   if (call.name === "click_visible") {
     const action = normalizedPointerAction("click", call.arguments, true);
     return action
@@ -235,6 +260,7 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
   private readonly random: () => number;
   private previousInteractionId: string | undefined;
   private pendingCalls: PendingFunctionCall[] = [];
+  private contextEpoch = 0;
 
   constructor(private readonly options: GeminiComputerUseAgentOptions) {
     this.model = options.model;
@@ -248,6 +274,7 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     if (this.pendingCalls.length > 0) {
       return blocked(undefined, "Gemini function call result must be reported before the next observation");
     }
+    const contextEpoch = this.contextEpoch;
     return this.invokeAndInterpret({
       model: this.apiModelId(),
       input: [
@@ -255,7 +282,7 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
         { type: "image", data: toBase64(observation.screenshot), mime_type: observation.mimeType },
       ],
       tools: COMPUTER_USE_TOOLS,
-    }, signal);
+    }, signal, contextEpoch);
   }
 
   async reportActionResults(
@@ -272,6 +299,7 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     }
     const pendingCalls = this.pendingCalls;
     this.pendingCalls = [];
+    const contextEpoch = this.contextEpoch;
     let actionIndex = 0;
     return this.invokeAndInterpret({
       model: this.apiModelId(),
@@ -292,10 +320,17 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
         };
       }),
       tools: COMPUTER_USE_TOOLS,
-    }, signal);
+    }, signal, contextEpoch);
+  }
+
+  async resetContext(): Promise<void> {
+    this.contextEpoch += 1;
+    this.previousInteractionId = undefined;
+    this.pendingCalls = [];
   }
 
   async close(): Promise<void> {
+    this.contextEpoch += 1;
     this.previousInteractionId = undefined;
     this.pendingCalls = [];
   }
@@ -304,7 +339,11 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     return this.model.startsWith("google/") ? this.model.slice("google/".length) : this.model;
   }
 
-  private async invokeAndInterpret(request: GeminiTransportRequest, signal: AbortSignal): Promise<AgentTurn> {
+  private async invokeAndInterpret(
+    request: GeminiTransportRequest,
+    signal: AbortSignal,
+    contextEpoch: number,
+  ): Promise<AgentTurn> {
     const startedAt = this.now();
     let response: unknown;
     for (let attempt = 0; ; attempt += 1) {
@@ -322,7 +361,13 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     void this.now();
     const rawProviderOutput = safeRawProviderOutput(response);
     if (byteLength(response) > this.options.performance.maxResponseBytes) {
-      throw new Error(`Model response exceeds ${this.options.performance.maxResponseBytes} bytes`);
+      return recoverable(
+        undefined,
+        `Model response exceeds ${this.options.performance.maxResponseBytes} bytes`,
+      );
+    }
+    if (contextEpoch !== this.contextEpoch) {
+      return blocked(rawProviderOutput, "Gemini interaction was invalidated by a context reset");
     }
     return this.interpret(response, rawProviderOutput);
   }
@@ -332,8 +377,8 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
       return blocked(rawProviderOutput, "Gemini interaction returned a provider error");
     }
     const interaction = interactionParts(response);
-    if (!interaction) return blocked(rawProviderOutput, "Malformed Gemini interaction response");
-    if (!interaction.status) return blocked(rawProviderOutput, "Gemini interaction did not include a status");
+    if (!interaction) return recoverable(rawProviderOutput, "Malformed Gemini interaction response");
+    if (!interaction.status) return recoverable(rawProviderOutput, "Gemini interaction did not include a status");
     if (interaction.status === "failed" || interaction.status === "cancelled" || interaction.status === "incomplete") {
       return blocked(rawProviderOutput, `Gemini interaction ${interaction.status}`);
     }
@@ -343,7 +388,7 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     const functionCallSteps = interaction.steps.filter((step) => isRecord(step) && step.type === "function_call");
     if (functionCallSteps.length === 0) {
       if (interaction.status !== "completed") {
-        return blocked(rawProviderOutput, `Gemini interaction ended without an action (${interaction.status})`);
+        return recoverable(rawProviderOutput, `Gemini interaction ended without an action (${interaction.status})`);
       }
       this.previousInteractionId = interaction.id;
       return { status: "finished", actions: [], rawProviderOutput };
@@ -351,17 +396,17 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
     const calls: NativeFunctionCall[] = [];
     for (const step of functionCallSteps) {
       const call = nativeFunctionCall(step);
-      if (!call) return blocked(rawProviderOutput, "Gemini returned a malformed function call");
+      if (!call) return recoverable(rawProviderOutput, "Gemini returned a malformed function call");
       calls.push(call);
     }
     const parsed = calls.map(parseComputerAction);
     if (parsed.some((action) => !action)) {
-      return blocked(rawProviderOutput, "Gemini returned an unsupported or malformed function call");
+      return recoverable(rawProviderOutput, "Gemini returned an unsupported or malformed function call");
     }
     const parsedCalls = parsed as { actions: ComputerAction[]; actionBatchType: AgentActionBatchType; intent?: string }[];
     const actions = parsedCalls.flatMap(({ actions: callActions }) => callActions);
     if (actions.length > MAX_BATCH_ACTIONS) {
-      return blocked(rawProviderOutput, `Gemini returned more than ${MAX_BATCH_ACTIONS} actions`);
+      return recoverable(rawProviderOutput, `Gemini returned more than ${MAX_BATCH_ACTIONS} actions`);
     }
     this.previousInteractionId = interaction.id;
     this.pendingCalls = calls.map(({ id, name }, index) => ({ id, name, actionCount: parsedCalls[index].actions.length }));
@@ -369,7 +414,9 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
       ? "navigation"
       : parsedCalls.every(({ actionBatchType }) => actionBatchType === "trial")
         ? "trial"
-        : undefined;
+        : parsedCalls.every(({ actionBatchType }) => actionBatchType === "wait")
+          ? "wait"
+          : undefined;
     return {
       status: "actions",
       actions,

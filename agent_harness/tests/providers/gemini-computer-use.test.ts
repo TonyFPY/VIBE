@@ -103,6 +103,102 @@ describe("GeminiComputerUseAgent", () => {
     })]);
   });
 
+  it("classifies an oversized provider response as recoverable", async () => {
+    const transport = fakeTransport({
+      id: "oversized-interaction",
+      steps: [],
+      status: "completed",
+      padding: "x".repeat(performance.maxResponseBytes + 1),
+    });
+
+    await expect(agent(transport).next(observation, new AbortController().signal)).resolves.toMatchObject({
+      status: "recoverable",
+      actions: [],
+      failureReason: `Model response exceeds ${performance.maxResponseBytes} bytes`,
+    });
+  });
+
+  it("advertises integer normalized coordinate bounds and descriptions for every custom coordinate", async () => {
+    const transport = fakeTransport(interaction([
+      functionCall("click_visible", { x: 700, y: 500, intent: "start" }),
+    ]));
+
+    await agent(transport).next(observation, new AbortController().signal);
+
+    const request = transport.requests[0] as { tools: Array<Record<string, any>> };
+    const clickSchema = request.tools.find((tool) => tool.name === "click_visible")!.parameters;
+    const trialSchema = request.tools.find((tool) => tool.name === "submit_trial_actions")!.parameters;
+    const coordinateSchemas = [
+      clickSchema.properties.x,
+      clickSchema.properties.y,
+      trialSchema.properties.moves.items.properties.x,
+      trialSchema.properties.moves.items.properties.y,
+      trialSchema.properties.click.properties.x,
+      trialSchema.properties.click.properties.y,
+    ];
+
+    for (const schema of coordinateSchemas) {
+      expect(schema).toMatchObject({
+        type: "integer",
+        minimum: 0,
+        maximum: 999,
+        description: expect.stringContaining("normalized"),
+      });
+    }
+  });
+
+  it("resets pending calls and interaction context before a fresh observation", async () => {
+    const transport = fakeTransport(
+      interaction([
+        functionCall("click_visible", { x: 500, y: 500, intent: "start" }),
+      ], "old-interaction"),
+      interaction([{ type: "text", text: "Fresh interaction." }], "new-interaction"),
+    );
+    const computerUseAgent = agent(transport);
+    const signal = new AbortController().signal;
+
+    await computerUseAgent.next(observation, signal);
+    await computerUseAgent.resetContext();
+
+    await expect(computerUseAgent.next(observation, signal)).resolves.toMatchObject({
+      status: "finished",
+      actions: [],
+    });
+    expect(transport.requests).toHaveLength(2);
+    expect(transport.requests[1]).not.toHaveProperty("previous_interaction_id");
+  });
+
+  it("ignores a next response that resolves after its context was reset", async () => {
+    let resolveStaleResponse!: (response: unknown) => void;
+    const staleResponse = new Promise<unknown>((resolve) => {
+      resolveStaleResponse = resolve;
+    });
+    const transport: GeminiTransport & { readonly requests: unknown[] } = {
+      requests: [],
+      async invoke(request) {
+        this.requests.push(request);
+        return this.requests.length === 1
+          ? staleResponse
+          : interaction([{ type: "text", text: "Fresh interaction." }], "fresh-interaction");
+      },
+    };
+    const computerUseAgent = agent(transport);
+    const signal = new AbortController().signal;
+
+    const staleRequest = computerUseAgent.next(observation, signal);
+    await computerUseAgent.resetContext();
+    resolveStaleResponse(interaction([
+      functionCall("click_visible", { x: 500, y: 500, intent: "stale" }),
+    ], "stale-interaction"));
+    await staleRequest;
+
+    await expect(computerUseAgent.next(observation, signal)).resolves.toMatchObject({
+      status: "finished",
+      actions: [],
+    });
+    expect(transport.requests).toHaveLength(2);
+  });
+
   it("serializes only the public observation and the complete restricted tool contract", async () => {
     const publicObservation: AgentObservation = {
       ...observation,
@@ -134,12 +230,14 @@ describe("GeminiComputerUseAgent", () => {
         "scroll", "go_back", "navigate", "go_forward", "wait",
       ],
     });
+    expect((request.input[0] as { text: string }).text).toContain("integer normalized x/y value from 0 through 999");
+    expect((request.input[0] as { text: string }).text).toContain("not CSS pixels");
 
     const serialized = JSON.stringify(request);
     expect(serialized).toContain("PUBLIC_INSTRUCTION_CANARY");
     for (const privilegedValue of [
       "SECRET_ANSWER_CANARY", "PRIVATE_TASK_METADATA_CANARY", "Playwright", "page", "url", "DOM", "accessibility", "filesystem",
-      "click_at", "hover_at", "wait_5_seconds",
+      "click_at", "hover_at",
     ]) {
       expect(serialized).not.toContain(privilegedValue);
     }
@@ -153,6 +251,16 @@ describe("GeminiComputerUseAgent", () => {
       actionBatchType: "navigation",
       actions: [{ type: "click", x: 756, y: 337 }],
       providerIntent: "choose the visible candidate",
+    });
+  });
+
+  it("parses Gemini's native five-second loading wait as a non-trial wait batch", async () => {
+    await expect(agent(fakeTransport(interaction([
+      functionCall("wait_5_seconds", {}),
+    ]))).next(observation, new AbortController().signal)).resolves.toMatchObject({
+      status: "actions",
+      actionBatchType: "wait",
+      actions: [{ type: "wait", milliseconds: 5000 }],
     });
   });
 
@@ -213,7 +321,7 @@ describe("GeminiComputerUseAgent", () => {
     await expect(agent(fakeTransport(interaction([
       functionCall("submit_trial_actions", trialArguments(moves)),
     ]))).next(observation, new AbortController().signal)).resolves.toMatchObject({
-      status: "blocked",
+      status: "recoverable",
       actions: [],
     });
   });
@@ -232,21 +340,21 @@ describe("GeminiComputerUseAgent", () => {
     ["a malformed final click", functionCall("submit_trial_actions", { moves: Array.from({ length: 9 }, () => ({ x: 1, y: 1 })), click: { x: 500 } })],
   ])("rejects %s", async (_name, call) => {
     await expect(agent(fakeTransport(interaction([call]))).next(observation, new AbortController().signal)).resolves.toMatchObject({
-      status: "blocked",
+      status: "recoverable",
       actions: [],
     });
   });
 
   it.each([
-    ["an unsupported function", functionCall("navigate", { url: "https://example.test" })],
-    ["missing function-call arguments", { type: "function_call", id: "call-1", name: "click_visible" }],
-    ["unexpected setup arguments", functionCall("click_visible", { x: 500, y: 500, intent: "start", url: "https://example.test" })],
-    ["a safety block", { type: "safety", decision: "requires_confirmation" }],
-    ["a prompt block", { type: "prompt_blocked", decision: "blocked" }],
-  ])("blocks %s without returning an executable action", async (_name, stepOrSteps) => {
+    ["an unsupported function", functionCall("navigate", { url: "https://example.test" }), "recoverable"],
+    ["missing function-call arguments", { type: "function_call", id: "call-1", name: "click_visible" }, "recoverable"],
+    ["unexpected setup arguments", functionCall("click_visible", { x: 500, y: 500, intent: "start", url: "https://example.test" }), "recoverable"],
+    ["a safety block", { type: "safety", decision: "requires_confirmation" }, "blocked"],
+    ["a prompt block", { type: "prompt_blocked", decision: "blocked" }, "blocked"],
+  ])("classifies %s without returning an executable action", async (_name, stepOrSteps, expectedStatus) => {
     const steps = Array.isArray(stepOrSteps) ? stepOrSteps : [stepOrSteps];
     const turn = await agent(fakeTransport(interaction(steps))).next(observation, new AbortController().signal);
-    expect(turn.status).toBe("blocked");
+    expect(turn.status).toBe(expectedStatus);
     expect(turn.actions).toEqual([]);
   });
 
@@ -258,19 +366,20 @@ describe("GeminiComputerUseAgent", () => {
   });
 
   it.each([
-    ["missing status", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: undefined }), "status"],
-    ["failed", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "failed" }), "failed"],
-    ["cancelled", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "cancelled" }), "cancelled"],
-    ["incomplete", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "incomplete" }), "incomplete"],
-    ["top-level error", { error: { message: "provider error" } }, "provider error"],
+    ["missing status", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: undefined }), "recoverable", "status"],
+    ["failed", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "failed" }), "blocked", "failed"],
+    ["cancelled", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "cancelled" }), "blocked", "cancelled"],
+    ["incomplete", interaction([{ type: "text", text: "terminal" }], "interaction-1", { status: "incomplete" }), "blocked", "incomplete"],
+    ["top-level error", { error: { message: "provider error" } }, "blocked", "provider error"],
     [
       "interaction error",
       interaction([{ type: "text", text: "terminal" }], "interaction-1", { error: { message: "provider error" } }),
+      "blocked",
       "provider error",
     ],
-  ])("blocks a %s no-action interaction instead of treating it as finished", async (_name, response, failureReason) => {
+  ])("classifies a %s no-action interaction instead of treating it as finished", async (_name, response, expectedStatus, failureReason) => {
     const turn = await agent(fakeTransport(response)).next(observation, new AbortController().signal);
-    expect(turn).toMatchObject({ status: "blocked", actions: [] });
+    expect(turn).toMatchObject({ status: expectedStatus, actions: [] });
     expect(turn.failureReason).toContain(failureReason);
   });
 
@@ -361,7 +470,7 @@ describe("GeminiComputerUseAgent", () => {
     await expect(agent(fakeTransport(interaction([
       functionCall("click", { x: 700, y: 500 }),
     ]))).next(observation, new AbortController().signal)).resolves.toMatchObject({
-      status: "blocked",
+      status: "recoverable",
       actions: [],
     });
   });

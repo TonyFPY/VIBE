@@ -17,7 +17,10 @@ export interface PlaywrightBrowserHostOptions {
   settleDelayMs: number;
   navigationTimeoutMs: number;
   mouseMoveSteps?: number;
+  mouseMoveDelayMs?: number;
 }
+
+const DEFAULT_MOUSE_MOVE_DELAY_MS = 20;
 
 const defaultLauncher: BrowserLauncherPort = {
   launch: async (options) => chromium.launch(options) as Promise<BrowserPort>,
@@ -129,6 +132,7 @@ export class PlaywrightBrowserHost implements BrowserHost {
         move: async (x: number, y: number) => {
           assertOpen();
           await page.mouse.move(x, y, { steps: this.options.mouseMoveSteps ?? 1 });
+          await wait(this.options.mouseMoveDelayMs ?? DEFAULT_MOUSE_MOVE_DELAY_MS);
           await this.updateCursor(page, x, y, false);
         },
         click: async (x: number, y: number) => {

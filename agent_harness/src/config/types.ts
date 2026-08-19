@@ -1,4 +1,5 @@
 export type HarnessRunMode = "dev" | "ops";
+export type HarnessTask = "visual-similarity" | "object-matching";
 
 export interface Viewport {
   width: 1080;
@@ -23,6 +24,7 @@ export interface HarnessConfig {
   viewport: Viewport;
   screenshotQuality: number;
   mouseMoveSteps: number;
+  mouseMoveDelayMs: number;
   maxSteps: number;
   maxInvalidActions: number;
   performance: PerformanceConfig;

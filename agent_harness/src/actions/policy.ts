@@ -1,6 +1,6 @@
 export type ComputerActionValidation = { valid: true } | { valid: false; error: string };
 
-export type ActionBatchPhase = "setup" | "trial";
+export type ActionBatchPhase = "setup" | "trial" | "wait";
 
 // Adjust these two totals to change the trial action budget. The Gemini
 // custom-function move bounds derive from them below.
@@ -68,6 +68,13 @@ export function validateComputerActionBatch(
   if (actions.length === 0) return { valid: false, error: "Batch must contain at least one action" };
   if (actions.length > MAX_BATCH_ACTIONS) {
     return { valid: false, error: `Batch cannot contain more than ${MAX_BATCH_ACTIONS} actions` };
+  }
+  if (phase === "wait") {
+    if (actions.length !== 1 || !isRecord(actions[0]) || actions[0].type !== "wait") {
+      return { valid: false, error: "Wait batch must contain exactly one wait action" };
+    }
+    const validation = validateComputerAction(actions[0], viewport);
+    return validation.valid ? { valid: true } : { valid: false, error: `Invalid wait action: ${validation.error}` };
   }
   if (phase === "setup" && actions.length !== 1) {
     return { valid: false, error: "Setup batch must contain exactly one click" };

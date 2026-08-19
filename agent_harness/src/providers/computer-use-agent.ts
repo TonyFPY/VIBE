@@ -9,5 +9,6 @@ export interface ComputerUseAgent {
     results: readonly ActionResult[],
     signal: AbortSignal,
   ): Promise<AgentTurn>;
+  resetContext?(): Promise<void>;
   close(): Promise<void>;
 }

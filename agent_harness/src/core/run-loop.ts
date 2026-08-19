@@ -28,6 +28,22 @@ interface BackendState {
 
 type ProviderMethod = "next" | "reportActionResults";
 
+class AgentRequestTimeoutError extends Error {
+  constructor() {
+    super("agent request timeout");
+    this.name = "AgentRequestTimeoutError";
+  }
+}
+
+const MAX_MODEL_OUTPUT_RECOVERY_RETRIES = 3;
+const MODEL_OUTPUT_RECOVERY_MARKER = "Recovery instruction: the previous model output was rejected by the harness.";
+const MODEL_OUTPUT_RECOVERY_INSTRUCTION = [
+  MODEL_OUTPUT_RECOVERY_MARKER,
+  "Do not describe the action in prose.",
+  "Return a valid action batch using only the declared tools.",
+  "For a trial response, provide the required visible moves followed by one final click.",
+].join(" ");
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown harness failure";
 }
@@ -159,9 +175,62 @@ export class RunLoop {
         setStepLimitIfReached,
       );
       let phase: ActionBatchPhase = "setup";
+      let outputRecoveryAttempts = 0;
 
       while (turn) {
         if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
+        if (turn.status === "recoverable") {
+          if (outputRecoveryAttempts >= MAX_MODEL_OUTPUT_RECOVERY_RETRIES) {
+            summary = {
+              ...summary,
+              status: "incomplete",
+              failureReason: `model output recovery exhausted after ${MAX_MODEL_OUTPUT_RECOVERY_RETRIES} attempts${turn.failureReason ? `: ${turn.failureReason}` : ""}`,
+            };
+            break;
+          }
+          outputRecoveryAttempts += 1;
+          await this.dependencies.logger.log({
+            type: "provider-output-recovery",
+            at: this.nowIso(),
+            step: summary.stepCount,
+            attempt: outputRecoveryAttempts,
+            maxAttempts: MAX_MODEL_OUTPUT_RECOVERY_RETRIES,
+            reason: turn.failureReason ?? "provider returned an invalid model output",
+          });
+          if (!this.dependencies.agent.resetContext) {
+            summary = {
+              ...summary,
+              status: "incomplete",
+              failureReason: "model output recovery requires provider context reset",
+            };
+            break;
+          }
+          await this.dependencies.agent.resetContext();
+          await this.dependencies.logger.log({
+            type: "provider-context-reset",
+            at: this.nowIso(),
+            step: summary.stepCount,
+            reason: "provider-output-recovery",
+          });
+          observation = {
+            ...observation,
+            publicInstruction: observation.publicInstruction.includes(MODEL_OUTPUT_RECOVERY_MARKER)
+              ? observation.publicInstruction
+              : `${observation.publicInstruction}\n\n${MODEL_OUTPUT_RECOVERY_INSTRUCTION}`,
+          };
+          turn = await this.callProvider(
+            "next",
+            observation,
+            undefined,
+            config,
+            timing.provider,
+            summary,
+            setTerminalFromBackend,
+            setTimeoutIfExpired,
+            setStepLimitIfReached,
+          );
+          continue;
+        }
         if (turn.status === "blocked") {
           summary = { ...summary, status: "failed", failureReason: turn.failureReason ?? "provider blocked" };
           break;
@@ -174,7 +243,9 @@ export class RunLoop {
         const validationStartedAt = this.nowMs();
         const validationPhase = turn.actionBatchType === "navigation"
           ? "setup"
-          : phase;
+          : turn.actionBatchType === "wait"
+            ? "wait"
+            : phase;
         const actionValidation = validateComputerActionBatch(turn.actions, config.viewport, validationPhase);
         timing.parseAndValidate.observe(this.nowMs() - validationStartedAt);
         if (!actionValidation.valid) {
@@ -238,26 +309,50 @@ export class RunLoop {
           summary = { ...summary, status: "failed", failureReason: failure?.error ?? "Action execution failed" };
           break;
         }
+        outputRecoveryAttempts = 0;
         const settleStartedAt = this.nowMs();
         await this.sleep(config.performance.settleDelayMs);
         timing.settle.observe(this.nowMs() - settleStartedAt);
         if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
-        await this.beginFixation(session, config, summary, timing.actionAndLog);
-        if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
+        if (turn.actionBatchType !== "wait") {
+          await this.beginFixation(session, config, summary, timing.actionAndLog);
+          if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
+        }
         observation = await this.captureObservation(session, config, publicInstruction, summary, timing.screenshotAndLog);
         if (setTerminalFromBackend() || setTimeoutIfExpired() || setStepLimitIfReached()) break;
-        phase = "trial";
-        turn = await this.callProvider(
-          "reportActionResults",
-          observation,
-          execution.results,
-          config,
-          timing.provider,
-          summary,
-          setTerminalFromBackend,
-          setTimeoutIfExpired,
-          setStepLimitIfReached,
-        );
+        if (turn.actionBatchType !== "wait") phase = "trial";
+        if (turn.actionBatchType === "trial" && this.dependencies.agent.resetContext) {
+          await this.dependencies.agent.resetContext();
+          await this.dependencies.logger.log({
+            type: "provider-context-reset",
+            at: this.nowIso(),
+            step: summary.stepCount,
+            reason: "trial-boundary",
+          });
+          turn = await this.callProvider(
+            "next",
+            observation,
+            undefined,
+            config,
+            timing.provider,
+            summary,
+            setTerminalFromBackend,
+            setTimeoutIfExpired,
+            setStepLimitIfReached,
+          );
+        } else {
+          turn = await this.callProvider(
+            "reportActionResults",
+            observation,
+            execution.results,
+            config,
+            timing.provider,
+            summary,
+            setTerminalFromBackend,
+            setTimeoutIfExpired,
+            setStepLimitIfReached,
+          );
+        }
       }
     } catch (error) {
       if (summary.status !== "completed") {
@@ -398,30 +493,73 @@ export class RunLoop {
   ): Promise<AgentTurn | undefined> {
     if (setTerminalFromBackend() || setTimeoutIfExpired() || setStepLimitIfReached()) return undefined;
     summary.stepCount += 1;
+    try {
+      return await this.requestAndLogProviderTurn(
+        method,
+        observation,
+        results,
+        config,
+        timing,
+        summary,
+      );
+    } catch (error) {
+      if (!(error instanceof AgentRequestTimeoutError) || !this.dependencies.agent.resetContext) throw error;
+      await this.dependencies.agent.resetContext();
+      await this.dependencies.logger.log({
+        type: "provider-timeout-recovery",
+        at: this.nowIso(),
+        step: summary.stepCount,
+        method,
+        retryMethod: "next",
+      });
+      if (setTerminalFromBackend() || setTimeoutIfExpired() || setStepLimitIfReached()) return undefined;
+      summary.stepCount += 1;
+      return this.requestAndLogProviderTurn(
+        "next",
+        observation,
+        undefined,
+        config,
+        timing,
+        summary,
+      );
+    }
+  }
+
+  private async requestAndLogProviderTurn(
+    method: ProviderMethod,
+    observation: AgentObservation,
+    results: readonly ActionResult[] | undefined,
+    config: HarnessConfig,
+    timing: TimingHistogram,
+    summary: RunSummary,
+  ): Promise<AgentTurn> {
     const providerStartedAtMs = this.nowMs();
     const providerStartedAt = this.nowIso();
-    const turn = await this.requestWithTimeout(
-      method === "next"
-        ? (signal) => this.dependencies.agent.next(observation, signal)
-        : (signal) => this.dependencies.agent.reportActionResults(observation, results!, signal),
-      config.performance.requestTimeoutMs,
-    );
-    const providerCompletedAt = this.nowIso();
-    timing.observe(this.nowMs() - providerStartedAtMs);
-    await this.dependencies.logger.log({
-      type: "provider-turn",
-      at: providerCompletedAt,
-      step: summary.stepCount,
-      provider: this.dependencies.agent.provider,
-      model: this.dependencies.agent.model,
-      method,
-      status: turn.status,
-      providerIntent: turn.providerIntent,
-      rawProviderOutput: rawProviderOutputWithoutResponseBodies(turn.rawProviderOutput),
-      modelRequestStartedAt: providerStartedAt,
-      modelResponseCompletedAt: providerCompletedAt,
-    });
-    return turn;
+    try {
+      const turn = await this.requestWithTimeout(
+        method === "next"
+          ? (signal) => this.dependencies.agent.next(observation, signal)
+          : (signal) => this.dependencies.agent.reportActionResults(observation, results!, signal),
+        config.performance.requestTimeoutMs,
+      );
+      const providerCompletedAt = this.nowIso();
+      await this.dependencies.logger.log({
+        type: "provider-turn",
+        at: providerCompletedAt,
+        step: summary.stepCount,
+        provider: this.dependencies.agent.provider,
+        model: this.dependencies.agent.model,
+        method,
+        status: turn.status,
+        providerIntent: turn.providerIntent,
+        rawProviderOutput: rawProviderOutputWithoutResponseBodies(turn.rawProviderOutput),
+        modelRequestStartedAt: providerStartedAt,
+        modelResponseCompletedAt: providerCompletedAt,
+      });
+      return turn;
+    } finally {
+      timing.observe(this.nowMs() - providerStartedAtMs);
+    }
   }
 
   private async requestWithTimeout(
@@ -432,7 +570,7 @@ export class RunLoop {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeout = setTimeout(() => {
-        const error = new Error("agent request timeout");
+        const error = new AgentRequestTimeoutError();
         controller.abort(error);
         reject(error);
       }, timeoutMs);

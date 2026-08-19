@@ -19,7 +19,7 @@ Credentials, so authenticate with the Google Cloud CLI (or set
 gcloud auth application-default login
 node results/scripts/export_firestore.mjs \
   --project vibe-9d6e5 \
-  --output /tmp/vibe-results \
+  --output results/firestore-export \
   --task visual_similarity
 ```
 
@@ -34,14 +34,16 @@ Build the standalone viewer from that folder:
 
 ```bash
 node results/scripts/build_results_viewer.mjs \
-  --input /tmp/vibe-results \
-  --output /tmp/vibe-results/viewer.html
-open /tmp/vibe-results/viewer.html       # macOS
+  --input results/firestore-export \
+  --output results/firestore-export/viewer.html
+open results/firestore-export/viewer.html       # macOS
 ```
 
-The HTML is self-contained and works offline. It pairs human and agent
-sessions by `runMode` + `participantId`, keeps unpaired sessions visible, and
-supports task/run/model/participant/trial filters. Each side shows response
+All Firestore export artifacts and the generated viewer remain under
+`results/firestore-export/`. The HTML is self-contained and works offline. It
+has independent human and agent participant-ID selectors; the IDs do not need
+to match. A missing side remains blank. It supports
+task/run/model/participant/trial filters. Each side shows response
 accuracy, reaction-time summaries, response coordinates, and the raw pointer
 trajectory (start and end markers; no smoothing). No DOM, credentials, or
 network access is used by the viewer.

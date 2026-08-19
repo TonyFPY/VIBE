@@ -1,6 +1,10 @@
 # Gemini custom action-batch design
 
-**Status:** Approved implementation direction
+**Status:** Current implementation direction
+
+This document defines the provider-facing custom-function contract. The
+experiment lifecycle, navigation handling, and browser timing are specified
+in the [trial-level design](2026-08-17-gemini-trial-action-batch-design.md).
 
 ## Decision
 

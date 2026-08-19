@@ -6,12 +6,17 @@ export interface ModelSpec {
 }
 
 export const MODEL_CATALOG: readonly ModelSpec[] = [
-  {
-    modelId: "google/gemini-3.7-flash",
-    apiModelId: "gemini-3.7-flash",
+  ...[
+    "gemini-3.7-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3-flash-preview",
+  ].map((apiModelId): ModelSpec => ({
+    modelId: `google/${apiModelId}`,
+    apiModelId,
     provider: "gemini",
     supportsComputerUse: true,
-  },
+  })),
 ] as const;
 
 export function resolveModelSpec(modelId: string): ModelSpec {

@@ -1,14 +1,15 @@
 # Gemini trial-level custom action batches
 
-**Status:** Draft for review
+**Status:** Current implementation design
 
 ## Decision
 
 The agent loop will operate at the experiment-trial boundary. Gemini receives
 one screenshot at the beginning of an interaction. Its screenshot-oriented
-Computer Use browser context is retained, but native pointer and browser
-control functions are excluded. The adapter exposes client-executed custom
-functions whose coordinate arguments are validated and executed by Playwright.
+Computer Use browser context is retained across setup/navigation continuation
+but reset after each completed trial, while native pointer and browser control
+functions are excluded. The adapter exposes client-executed custom functions
+whose coordinate arguments are validated and executed by Playwright.
 
 The custom functions are:
 
@@ -64,8 +65,8 @@ controller-owned center fixation
 Gemini calls submit_trial_actions
   ↓ Playwright executes 9–49 moves → click
 website records the final click and trial ends
-  ↓ grouped continuation results + one fresh screenshot
-if not complete: center fixation → next screenshot
+  ↓ settle, fixation, and one fresh screenshot
+if not complete: reset Gemini interaction → next request using that screenshot
 website saving/completed state
 ```
 
@@ -95,6 +96,8 @@ reportActionResults(
   results: readonly ActionResult[],
   signal: AbortSignal,
 ): Promise<AgentTurn>;
+
+resetContext?(): Promise<void>;
 ```
 
 `AgentTurn.actions` already carries an ordered action list. Each provider marks
@@ -123,23 +126,28 @@ flattened batches over 50 actions.
 The initial text input includes a provider interaction policy telling Gemini
 to use `click_visible` for a visible Start or Continue target, then use
 `submit_trial_actions` with at least nine separate moves and one final click
-on trial-response screens. The task instruction remains the participant-visible
-task goal. The policy guides the model; the harness enforces the phase-specific
-minimum and maximum.
+on trial-response screens. It also states that all custom coordinates are
+integer normalized values from `0` through `999`, not CSS pixels. The task
+instruction remains the participant-visible task goal. The policy guides the
+model; the harness enforces the phase-specific minimum and maximum.
 
-After execution, the continuation request contains one `function_result` for
-each pending call in original order. Each result includes only the public
-execution status/error. The single fresh screenshot is attached to the final
-function result, so one batch produces one new visual observation. No URL,
-DOM, response body, trial metadata, or answer data is added.
+After a navigation batch, the continuation request contains one
+`function_result` for each pending call in original order. Each result includes
+only the public execution status/error, with one fresh screenshot attached to
+the final result. After a completed trial batch, the Gemini adapter resets its
+interaction instead; the next request contains only the public instruction and
+the fresh screenshot. This bounds accumulated visual context without adding a
+URL, DOM, response body, trial metadata, or answer data.
 
 ## Browser execution and motion
 
 Each explicit `move` is executed sequentially through Playwright. The run
 configuration exposes `mouseMoveSteps`, defaulting to `1`, which sends one
-destination `mousemove` event rather than an interpolated path. The setting is
-passed to the browser host and applies to both model moves and controller
-fixation moves.
+destination `mousemove` event rather than an interpolated path, and
+`mouseMoveDelayMs`, defaulting to `20`, which paces successive model moves so
+the website's 16 ms trajectory sampler can retain them. Both settings are
+passed to the browser host; the delay applies to model moves and the step
+policy also applies to controller fixation moves.
 
 The harness logs each action with its batch index and total batch size. The
 existing `actionCount` remains the count of executed actions, while provider
@@ -154,6 +162,9 @@ trajectory remains authoritative for behavioral analysis.
   unexecuted actions are not silently repaired.
 - A backend success observed after the final click has precedence over further
   provider work and skips the next fixation.
+- A provider timeout resets the pending interaction and retries one fresh
+  screenshot request without replaying browser actions; a second timeout is
+  terminal.
 - Backend failure, timeout, provider block, invalid-action limit, and step
   limit retain their existing terminal semantics.
 - The provider receives screenshots and public instruction/policy only.
@@ -168,10 +179,12 @@ Add or update tests for:
   enforcement of the 10-action minimum;
 - `move* → click` shape and invalid sequence rejection;
 - one continuation request containing one result per call and one screenshot;
+- trial-boundary context reset and fresh screenshot-only continuation;
+- one safe provider-timeout recovery without replaying actions;
 - batch execution order with no intermediate screenshots;
 - initial instruction screenshot, Start action, Continue navigation, center
   fixation, next trial screenshot, and saving-page/backend completion ordering;
-- `mouseMoveSteps: 1` configuration and browser forwarding;
+- `mouseMoveSteps: 1` and `mouseMoveDelayMs: 20` configuration and browser forwarding;
 - no-cheating assertions for every function result, screenshot, action result,
   and logger event.
 

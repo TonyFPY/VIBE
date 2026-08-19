@@ -21,8 +21,7 @@ npm --prefix agent_harness exec -- playwright install chromium
 ```
 
 The Gemini adapter uses the Gemini API JavaScript SDK from `@google/genai`.
-Set an API key in the process environment; do not put the key in the JSON run
-configuration.
+Set an API key in the process environment:
 
 ```bash
 export GEMINI_API_KEY=your-api-key
@@ -30,20 +29,20 @@ export GEMINI_API_KEY=your-api-key
 
 ## Configure
 
-Create a private JSON run configuration outside source control:
+No JSON run file is required. Each run supplies the host, task, model, run
+mode, and participant ID directly:
 
-```json
-{
-  "taskUrl": "https://vibe-9d6e5.web.app/tasks/visual-similarity",
-  "participantId": "001",
-  "model": "google/gemini-3.7-flash",
-  "runMode": "dev"
-}
+```text
+--host https://vibe-9d6e5.web.app
+--task visual-similarity|object-matching
+--model google/<computer-use-model>
+--runMode dev|ops
+--pid <digits>
 ```
 
-The harness accepts only participant digits. It constructs
-`participant_id=A001`, adds the selected model and `run=dev|ops`, and removes
-unrelated query parameters before opening the task page.
+The harness constructs `participant_id=A001` from `--pid 001`; `--pid 1`
+sends `participant_id=A1` and saves participant ID `1`. The host must be an
+HTTP or HTTPS origin without a path, query, or fragment.
 
 The catalog currently accepts these Gemini Computer Use model IDs:
 
@@ -54,8 +53,8 @@ google/gemini-3.5-flash
 google/gemini-3-flash-preview
 ```
 
-The `google/` prefix is required in the JSON configuration; the harness sends
-the provider model ID without that prefix to the Gemini API.
+The `google/` prefix is required in `--model`; the harness sends the provider
+model ID without that prefix to the Gemini API.
 
 The viewport is fixed at `1080 x 675` CSS pixels with device scale factor `1`.
 The Gemini custom functions use integer normalized coordinates in the inclusive
@@ -68,16 +67,55 @@ const yCss = Math.floor(yGemini / 1000 * 675);
 
 Out-of-range coordinates are rejected. They are not clamped or repaired.
 
-The repository example at `agent_harness/tmp/gemini-run.json` sets
-`performance.settleDelayMs` to `2000`. After Playwright executes a batch, this
-delay gives deployed stimuli time to prepare before the controller performs
-the center fixation and captures the next screenshot.
+Performance defaults are encoded in
+[`src/config/load-config.ts`](src/config/load-config.ts): the browser waits
+`2000` ms after a batch for stimuli to prepare, provider requests allow
+`120000` ms, and the total run timeout is `1800000` ms. The same module keeps
+the fixed viewport, screenshot, pointer pacing, action, response-size, and
+retry defaults.
 
 ## Run
 
+The recommended wrapper resolves the repository paths automatically, so it can
+be called from any working directory:
+
 ```bash
-npm --prefix agent_harness start -- --config /absolute/path/to/run.json
-npm --prefix agent_harness start -- --config /absolute/path/to/run.json --headed
+./agent_harness/run.sh \
+  --host https://vibe-9d6e5.web.app \
+  --task visual-similarity \
+  --model google/gemini-3.7-flash \
+  --runMode dev \
+  --pid 1
+```
+
+For object matching or a visible browser:
+
+```bash
+./agent_harness/run.sh \
+  --host https://vibe-9d6e5.web.app \
+  --task object-matching \
+  --model google/gemini-3.7-flash \
+  --runMode dev \
+  --pid 1 \
+  --headed
+```
+
+The wrapper is [`run.sh`](run.sh); the direct npm form remains supported:
+
+```bash
+npm --prefix agent_harness start -- \
+  --host https://vibe-9d6e5.web.app \
+  --task visual-similarity \
+  --model google/gemini-3.7-flash \
+  --runMode dev \
+  --pid 1
+npm --prefix agent_harness start -- \
+  --host https://vibe-9d6e5.web.app \
+  --task object-matching \
+  --model google/gemini-3.7-flash \
+  --runMode dev \
+  --pid 1 \
+  --headed
 ```
 
 Runs are headless by default. `--headed` opens a visible Chromium window and
@@ -114,25 +152,51 @@ explicit moves followed by the final click. No intermediate screenshots are
 captured while a batch executes.
 
 After execution, the harness settles and checks completion, performs
-controller-owned center fixation if the experiment is still active, captures
-one fresh screenshot, and sends the per-action results back as one grouped
-function result per pending custom call. The fresh screenshot is attached only
-to the final grouped result. This is the provider-specific request/response
-mechanism; the provider-neutral `ComputerUseAgent` interface still exposes
-only screenshot observations, a navigation/trial batch kind, and coordinate
-actions. Navigation batches are validated as one click even after trial
-responses, so Continue pages follow the same rule as Start.
+controller-owned center fixation if the experiment is still active, and
+captures one fresh screenshot. Navigation batches continue the current
+provider interaction with grouped per-action results, so Continue pages follow
+the same rule as Start. After a successful trial batch, the Gemini adapter
+resets its provider interaction and the next request receives only the fresh
+screenshot and public instruction. This keeps the conversation context bounded
+without exposing page state or replaying browser actions. Providers that do
+not implement context reset retain the grouped-result continuation behavior.
+The provider-neutral `ComputerUseAgent` interface still exposes only
+screenshot observations, a navigation/trial batch kind, and coordinate actions.
+
+Gemini's native `wait_5_seconds` action is also accepted as a single loading
+wait. It is used only when the visible page says it is preparing or loading;
+the harness waits, captures a fresh screenshot, and does not insert a center
+fixation click. It is never part of a trial-response batch.
+
+If Gemini returns malformed or policy-invalid action output, the harness marks
+that provider turn recoverable, logs it, resets the Gemini interaction, and
+resends the same screenshot with a correction instruction. It retries up to
+three correction attempts for that provider turn. No action from a rejected
+turn is sent to Playwright. Safety, authentication, and other terminal
+provider failures still stop the run; exhausting the three correction attempts
+returns an incomplete run rather than pretending the trial succeeded.
+
+For Gemini and other providers that implement context reset, a provider
+timeout causes the run loop to abandon the pending interaction, start one
+fresh request from the latest screenshot, and never replay the
+already-executed action batch. A second timeout remains an unrecoverable
+provider failure. Providers without context reset retain the existing terminal
+timeout behavior.
 
 The setup/navigation phase accepts exactly one action: the `click_visible` click.
-Pointer movement uses non-interpolated Playwright steps by default. Set
-`mouseMoveSteps` at the top level of the JSON configuration to choose a value
-from `1` through `100`:
+Loading screens may use the separate one-action `wait_5_seconds` batch.
+Pointer movement uses non-interpolated Playwright steps by default. The
+runtime defaults are encoded in `src/config/load-config.ts`:
 
-```json
-{
-  "mouseMoveSteps": 1
-}
-```
+Playwright does not pause between successive model waypoints by default. The
+harness therefore waits `20` ms after each pointer move so the shared website
+trajectory sampler can observe movements that are at least `16` ms apart.
+Change the coded `mouseMoveSteps` and `mouseMoveDelayMs` defaults when tuning
+this pacing; `mouseMoveDelayMs: 0` disables the delay.
+
+`mouseMoveSteps` controls spatial interpolation inside one Playwright move;
+`mouseMoveDelayMs` controls time between model-emitted moves. The latter is
+the setting that affects trajectory sampling.
 
 The trial action budget is defined in `src/actions/policy.ts`:
 `MIN_TRIAL_BATCH_ACTIONS` is `10` and `MAX_BATCH_ACTIONS` is `50`. The Gemini

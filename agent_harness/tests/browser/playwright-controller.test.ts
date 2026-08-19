@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { PlaywrightBrowserHost } from "../../src/browser/playwright-controller";
 import type {
@@ -173,5 +173,31 @@ describe("PlaywrightBrowserHost", () => {
     await session.move(540, 338);
     expect(fixture.events).toContainEqual(["move", 540, 338, { steps: 7 }]);
     await session.close();
+  });
+
+  it("waits after each mouse movement by the configured delay", async () => {
+    vi.useFakeTimers();
+    try {
+      const fixture = createFixture();
+      const host = new PlaywrightBrowserHost({
+        launcher: fixture.launcher,
+        settleDelayMs: 0,
+        navigationTimeoutMs: 10_000,
+        mouseMoveDelayMs: 20,
+      });
+      const session = await host.openSession("https://example.test/tasks/visual-similarity", { width: 1080, height: 675 });
+      let completed = false;
+      const movement = session.move(540, 338).then(() => { completed = true; });
+
+      await vi.advanceTimersByTimeAsync(19);
+      expect(completed).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await movement;
+      expect(completed).toBe(true);
+      await session.close();
+      await host.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

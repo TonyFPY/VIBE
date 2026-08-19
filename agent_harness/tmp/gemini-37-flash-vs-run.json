@@ -1,9 +1,10 @@
 {
   "taskUrl": "https://vibe-9d6e5.web.app/tasks/visual-similarity",
-  "participantId": "001",
+  "participantId": "002",
   "model": "google/gemini-3.7-flash",
   "runMode": "dev",
   "performance": {
-    "settleDelayMs": 2000
+    "settleDelayMs": 2000,
+    "requestTimeoutMs": 120000
   }
 }

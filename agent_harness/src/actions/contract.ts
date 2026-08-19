@@ -15,10 +15,10 @@ export interface ActionResult {
   error?: string;
 }
 
-export type AgentActionBatchType = "navigation" | "trial";
+export type AgentActionBatchType = "navigation" | "trial" | "wait";
 
 export interface AgentTurn {
-  status: "actions" | "finished" | "blocked";
+  status: "actions" | "finished" | "recoverable" | "blocked";
   actions: readonly ComputerAction[];
   rawProviderOutput: unknown;
   actionBatchType?: AgentActionBatchType;

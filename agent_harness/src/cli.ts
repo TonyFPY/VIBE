@@ -1,21 +1,26 @@
-import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { PlaywrightBrowserHost, type PlaywrightBrowserHostOptions } from "./browser/playwright-controller";
-import { parseHarnessConfig } from "./config/load-config";
+import { buildTaskUrlFromHost, parseHarnessConfig } from "./config/load-config";
 import { resolveModelSpec } from "./config/model-catalog";
-import type { HarnessConfig } from "./config/types";
+import type { HarnessConfig, HarnessRunMode, HarnessTask } from "./config/types";
 import { RunLoop } from "./core/run-loop";
 import { RunLogger } from "./logging/run-logger";
 import { publicInstructionForTask } from "./prompts/public-instruction";
 import { GeminiComputerUseAgent, type GeminiComputerUseAgentOptions } from "./providers/gemini-computer-use";
 import type { ComputerUseAgent } from "./providers/computer-use-agent";
 
+export type CliTask = HarnessTask;
+
 export interface CliArgs {
-  configPath: string;
+  host: string;
   headed: boolean;
+  participantId: string;
+  task: CliTask;
+  model: string;
+  runMode: HarnessRunMode;
 }
 
 export type GeminiComputerUseAgentFactory = (
@@ -34,12 +39,17 @@ export function createPlaywrightBrowserHost(
     settleDelayMs: config.performance.settleDelayMs,
     navigationTimeoutMs: config.performance.connectTimeoutMs,
     mouseMoveSteps: config.mouseMoveSteps,
+    mouseMoveDelayMs: config.mouseMoveDelayMs,
   });
 }
 
 export function parseCliArgs(args: readonly string[]): CliArgs {
-  let configPath: string | undefined;
+  let host: string | undefined;
   let headed = false;
+  let participantId: string | undefined;
+  let task: CliTask | undefined;
+  let model: string | undefined;
+  let runMode: HarnessRunMode | undefined;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--headed") {
@@ -47,15 +57,63 @@ export function parseCliArgs(args: readonly string[]): CliArgs {
       headed = true;
       continue;
     }
+    if (argument === "--host") {
+      if (host !== undefined) throw new Error("--host may be supplied only once");
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--host requires an HTTP URL");
+      host = value.trim();
+      index += 1;
+      continue;
+    }
+    if (argument === "--pid") {
+      if (participantId !== undefined) throw new Error("--pid may be supplied only once");
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--pid requires a participant ID");
+      const trimmed = value.trim();
+      if (!/^\d{1,12}$/.test(trimmed)) throw new Error("--pid must contain 1 to 12 digits");
+      participantId = trimmed;
+      index += 1;
+      continue;
+    }
+    if (argument === "--task") {
+      if (task !== undefined) throw new Error("--task may be supplied only once");
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--task requires a task name");
+      const trimmed = value.trim();
+      if (trimmed !== "visual-similarity" && trimmed !== "object-matching") {
+        throw new Error("--task must be visual-similarity or object-matching");
+      }
+      task = trimmed;
+      index += 1;
+      continue;
+    }
+    if (argument === "--model") {
+      if (model !== undefined) throw new Error("--model may be supplied only once");
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--model requires a model ID");
+      model = value.trim();
+      index += 1;
+      continue;
+    }
+    if (argument === "--runMode") {
+      if (runMode !== undefined) throw new Error("--runMode may be supplied only once");
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--runMode requires dev or ops");
+      const trimmed = value.trim();
+      if (trimmed !== "dev" && trimmed !== "ops") throw new Error("--runMode must be dev or ops");
+      runMode = trimmed;
+      index += 1;
+      continue;
+    }
     if (argument !== "--config") throw new Error(`Unexpected argument: ${argument}`);
-    if (configPath) throw new Error("--config may be supplied only once");
-    const value = args[index + 1];
-    if (!value || value.startsWith("--")) throw new Error("--config requires a JSON file path");
-    configPath = value;
-    index += 1;
+    throw new Error("--config is no longer supported; pass --host, --task, --model, --runMode, and --pid");
   }
-  if (!configPath) throw new Error("--config is required");
-  return { configPath, headed };
+  if (host === undefined) throw new Error("--host is required");
+  if (task === undefined) throw new Error("--task is required");
+  if (model === undefined) throw new Error("--model is required");
+  if (runMode === undefined) throw new Error("--runMode is required");
+  if (participantId === undefined) throw new Error("--pid is required");
+  return { host, headed, participantId, task, model, runMode };
 }
 
 function secretEnvironmentValues(environment: NodeJS.ProcessEnv): string[] {
@@ -79,9 +137,13 @@ export async function runCli(
   args: readonly string[] = process.argv.slice(2),
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<number> {
-  const { configPath, headed } = parseCliArgs(args);
-  const rawConfig = JSON.parse(await readFile(resolve(configPath), "utf8"));
-  const config = parseHarnessConfig(rawConfig);
+  const { host, headed, participantId, task, model, runMode } = parseCliArgs(args);
+  const config = parseHarnessConfig({
+    taskUrl: buildTaskUrlFromHost({ host, task, participantId, model, runMode }),
+    participantId,
+    model,
+    runMode,
+  });
   const agent = createGeminiComputerUseAgent(config, environment);
   const runId = `agent-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runsRoot = resolve(environment.AGENT_RUNS_DIR?.trim() || "runs");

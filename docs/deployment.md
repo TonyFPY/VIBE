@@ -114,10 +114,10 @@ static application.
 The Playwright worker lives under [`agent_harness/`](../agent_harness/README.md)
 and runs independently from Firebase Hosting and Functions. It opens the same
 deployed task URL used by humans, prefixes the numeric participant ID with `A`,
-captures viewport JPEGs, calls a selected Google Agent Platform vision model,
-and executes only validated pointer actions.
+captures viewport JPEGs, calls a selected Gemini API Computer Use model, and
+executes only validated pointer actions.
 
 Deploying or running the harness does not require rebuilding the website. Keep
-Google ADC, model permissions, private screenshots, and harness JSON Lines logs
-in the worker environment. The browser continues to submit behavioral results
-through its existing Firebase API; the harness does not duplicate that upload.
+`GEMINI_API_KEY`, private screenshots, and harness JSON Lines logs in the worker
+environment. The browser continues to submit behavioral results through its
+existing Firebase API; the harness does not duplicate that upload.

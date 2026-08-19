@@ -92,8 +92,6 @@ Rules:
 - For every trial, click the center cross first.
 - For every testing trial, after clicking the cross, move the cursor toward your chosen response image through multiple small visible movements, then click the image.
 - Do not jump directly from the center cross to a candidate with one direct click.
-- Choose the image that appears most similar to the reference.
-- Finish all 3 training trials and 10 testing trials.
 - If “Save incomplete” appears, click `Download results`, then `Download trajectories`, and stop.
 - If “Results saved successfully” appears, do not click a download button: the API already saved both files. Stop.
 ```
@@ -112,9 +110,7 @@ Rules:
 - Click Start and Continue normally.
 - For every trial, click the center cross first.
 - For every testing trial, after clicking the cross, move the cursor toward your selected option through multiple small visible movements, then click the option.
-- Do not jump directly from the center cross to an option with one direct click. Move the cursor instead.
-- Choose the candidate object that belongs with the central reference.
-- Finish all 3 training trials and 10 testing trials.
+- Do not jump directly from the center cross to an option with one direct click.
 - If “Save incomplete” appears, click `Download results`, then `Download trajectories`, and stop.
 - If “Results saved successfully” appears, do not click a download button: the API already saved both files. Stop.
 ```

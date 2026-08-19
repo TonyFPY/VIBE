@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-08-18T23:30:53.669Z",
+  "project": "vibe-9d6e5",
+  "database": "(default)",
+  "counts": {
+    "sessions": 17,
+    "responses": 170,
+    "trajectories": 170
+  }
+}

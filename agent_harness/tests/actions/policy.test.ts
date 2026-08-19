@@ -33,6 +33,11 @@ describe("computer action viewport and wait policy", () => {
     ).toEqual({ valid: true });
   });
 
+  it("accepts exactly one five-second wait batch outside trial responses", () => {
+    expect(validateComputerActionBatch([{ type: "wait", milliseconds: 5000 }], viewport, "wait" as never))
+      .toEqual({ valid: true });
+  });
+
   it("rejects a trial-sized setup batch so Start remains a single visible click", () => {
     const trialSizedBatch = [
       ...Array.from({ length: MIN_TRIAL_BATCH_ACTIONS - 1 }, (_, index) => ({
