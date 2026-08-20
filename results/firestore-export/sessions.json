@@ -36,6 +36,18 @@
     "runMode": "ops"
   },
   {
+    "payloadHash": "9b8dffd63959f78ea6aee5df6078364793f84c324df687e7738d52ddd210d526",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T01:48:45.008Z",
+    "sessionId": "ops_agent_13_20260820T012800Z_04638e76",
+    "participantId": "13",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash-lite",
+    "runMode": "ops"
+  },
+  {
     "payloadHash": "e816b1df925231875fbf9f2b5a92df51d4c6fcb64611a471d57b4a527ad1655e",
     "resultCount": 100,
     "trajectoryCount": 100,
@@ -72,6 +84,18 @@
     "runMode": "ops"
   },
   {
+    "payloadHash": "889c3e2f608de3b8b54a4d9fca9b310c9bfefbb9bf0767bbe89076061dbf7eaf",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T01:46:36.159Z",
+    "sessionId": "ops_agent_17_20260820T012903Z_3057bce7",
+    "participantId": "17",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash-lite",
+    "runMode": "ops"
+  },
+  {
     "payloadHash": "63185bc88fed90905478dfead400f28615d059de4d8aa9c901a30bc773056d2a",
     "resultCount": 100,
     "trajectoryCount": 100,
@@ -81,6 +105,18 @@
     "participantId": "18",
     "participantType": "agent",
     "model": "google/gemini-3-flash-preview",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "17bec80ef67b0ceb0232984f8f63cc7f98bfac8d5ee83914b8eea4465429c071",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:27:16.887Z",
+    "sessionId": "ops_agent_19_20260820T025643Z_b6567e57",
+    "participantId": "19",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash",
     "runMode": "ops"
   },
   {
@@ -108,6 +144,114 @@
     "runMode": "ops"
   },
   {
+    "payloadHash": "0872c185d6e3bcb9521a3ce76f074c582ce3079ca562441b9565a142d9f5e5b0",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T02:10:29.741Z",
+    "sessionId": "ops_agent_21_20260820T015134Z_302921c1",
+    "participantId": "21",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash-lite",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "825c52935586b34e264e875d40fbe26227bad130cd8bada5faad1ebba16d9abd",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T01:53:24.518Z",
+    "sessionId": "ops_agent_22_20260820T013050Z_b2bcc78e",
+    "participantId": "22",
+    "participantType": "agent",
+    "model": "google/gemini-3-flash-preview",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "afcac571c149d967212ef715573603fcc8d0450981c9d40925ede34baaddaaf9",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T01:57:14.937Z",
+    "sessionId": "ops_agent_23_20260820T013059Z_5d1f9124",
+    "participantId": "23",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "5381a79b0528519bed0e31f25e54ca779c82b5740ba2f719ef97a0ca324006ae",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T01:51:44.639Z",
+    "sessionId": "ops_agent_24_20260820T013105Z_63e543c7",
+    "participantId": "24",
+    "participantType": "agent",
+    "model": "google/gemini-3.7-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "ceeeed22b340870e7639aa844865b9b38d3275bf8dbb1729aad1461e18f464d7",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:31:03.629Z",
+    "sessionId": "ops_agent_25_20260820T031336Z_ddd0d916",
+    "participantId": "25",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash-lite",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "b6cf7be1970995d411a66b48b0282193c583738f7b27285b53fe3eaba439ca57",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:22:25.060Z",
+    "sessionId": "ops_agent_26_20260820T025903Z_4a037f30",
+    "participantId": "26",
+    "participantType": "agent",
+    "model": "google/gemini-3-flash-preview",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "2962d826ca7a65dde8fc3e47ac1aa95e1ea7bb73565d29be947cd4ecc84da4f6",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:29:46.085Z",
+    "sessionId": "ops_agent_27_20260820T025909Z_3ec83786",
+    "participantId": "27",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "36cd0c6e959e8b6e45b90e6680b652f858a7e848b8e7040cc77cca2a41f5102d",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:21:55.622Z",
+    "sessionId": "ops_agent_28_20260820T025915Z_9e993589",
+    "participantId": "28",
+    "participantType": "agent",
+    "model": "google/gemini-3.7-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "fb1b61e892a252f3ba2923b0cff99ec8e16497f08563f25e604cc48e8b44d1a7",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:19:27.505Z",
+    "sessionId": "ops_agent_29_20260820T025939Z_087b0228",
+    "participantId": "29",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash-lite",
+    "runMode": "ops"
+  },
+  {
     "payloadHash": "fdef344e68a8c8ee4b4dead981af5885d6a3c5642dfc5a11fb379d2d6fc7a043",
     "resultCount": 100,
     "trajectoryCount": 100,
@@ -120,6 +264,126 @@
     "runMode": "ops"
   },
   {
+    "payloadHash": "bc2a171ef0cb004e9c39e403c99cf15af38e42acd48c96948f6985dd56bea54e",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:23:22.436Z",
+    "sessionId": "ops_agent_30_20260820T025947Z_7535c6d7",
+    "participantId": "30",
+    "participantType": "agent",
+    "model": "google/gemini-3-flash-preview",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "f11298187a2483896e255ae88f4f53ff01a0a3f6f45368b0008af2a8401f174a",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:26:08.120Z",
+    "sessionId": "ops_agent_31_20260820T025952Z_6ffbd6f9",
+    "participantId": "31",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "45de38b37a3592ca714cb3b2c93f1ac8d1a95455a565c8cfdbf15e6771e84a73",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:21:31.300Z",
+    "sessionId": "ops_agent_32_20260820T025956Z_f3c3c749",
+    "participantId": "32",
+    "participantType": "agent",
+    "model": "google/gemini-3.7-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "b5e925dbe6cf60221c6b1b6db5cc9f31fad0db7f1e29664091c20d7c8a480ae2",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:49:49.987Z",
+    "sessionId": "ops_agent_33_20260820T033210Z_2205c81e",
+    "participantId": "33",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash-lite",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "da8c6408c77852da5d771017213ba18d288924266dd3dde61f5bbac903b48d19",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:58:05.707Z",
+    "sessionId": "ops_agent_34_20260820T033215Z_c5287b1d",
+    "participantId": "34",
+    "participantType": "agent",
+    "model": "google/gemini-3-flash-preview",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "4ba78f120d7419813d19510a155db0f8be02204cefc55044a2d73545184f7629",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T04:03:07.821Z",
+    "sessionId": "ops_agent_35_20260820T033220Z_f775d278",
+    "participantId": "35",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "c87c719c827216ad5c185df9ebf3635d2f09b797f7bafb1207e532fa6b430693",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:56:08.097Z",
+    "sessionId": "ops_agent_36_20260820T033225Z_7b362403",
+    "participantId": "36",
+    "participantType": "agent",
+    "model": "google/gemini-3.7-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "bddb0abdd0712608975a168a496f0c7c4a4c7d1b5504b5a945cfbb10b2d6e28b",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:51:56.708Z",
+    "sessionId": "ops_agent_37_20260820T033230Z_eee5bda8",
+    "participantId": "37",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash-lite",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "4410afc7ed35f35d9029f29ac8565dacd1d8620dacf0d0bc7a40c54d3b242914",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:57:20.468Z",
+    "sessionId": "ops_agent_38_20260820T033238Z_8dbf360c",
+    "participantId": "38",
+    "participantType": "agent",
+    "model": "google/gemini-3-flash-preview",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "49fcfa023716f39a0e4ce675014444b5b65bd533713240da48d34ed264a9c8cb",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:58:43.125Z",
+    "sessionId": "ops_agent_39_20260820T033244Z_a9c0c488",
+    "participantId": "39",
+    "participantType": "agent",
+    "model": "google/gemini-3.5-flash",
+    "runMode": "ops"
+  },
+  {
     "payloadHash": "87bd172b7445a9edaa085dc4803185129552dd950eb93be4bffd63dd4b179785",
     "resultCount": 100,
     "trajectoryCount": 100,
@@ -129,6 +393,18 @@
     "participantId": "3",
     "participantType": "agent",
     "model": "google/gemini-3.5-flash",
+    "runMode": "ops"
+  },
+  {
+    "payloadHash": "b283139efaf51a9da9374c2d5dd3c80877b85570e36d7489e34bda41a0b78e50",
+    "resultCount": 100,
+    "trajectoryCount": 100,
+    "writeCount": 201,
+    "savedAt": "2026-08-20T03:55:38.775Z",
+    "sessionId": "ops_agent_40_20260820T033250Z_6cb4645d",
+    "participantId": "40",
+    "participantType": "agent",
+    "model": "google/gemini-3.7-flash",
     "runMode": "ops"
   },
   {
