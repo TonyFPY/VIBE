@@ -34,6 +34,7 @@ export interface VisualSimilarityTrialResult {
   crossShownAt: number;
   crossClickedAt: number;
   stimulusShownAt: number;
+  stimulusToFirstMoveMs?: number;
   responseAt: number;
   reactionTimeMs: number;
   responseX: number;
@@ -59,6 +60,7 @@ export interface ObjectMatchingTrialResult {
   crossShownAt: number;
   crossClickedAt: number;
   stimulusShownAt: number;
+  stimulusToFirstMoveMs?: number;
   responseAt: number;
   reactionTimeMs: number;
   responseX: number;

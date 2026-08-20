@@ -18,6 +18,7 @@ import {
 import { InstructionPlugin, TestReadyPlugin, VisualSimilarityPlugin } from "../renderer";
 import { trainingAlignmentFeedback } from "../task";
 import { calculateReactionTimeMs } from "../../shared/experiment/geometry";
+import type { TrialResult } from "../../shared/experiment/types";
 
 describe("visual similarity task", () => {
   afterEach(() => {
@@ -235,6 +236,7 @@ describe("visual similarity task", () => {
     const [trial] = parseDreamSimCsv("id,left_vote,right_vote,ref_path,left_path,right_path\n1,1,0,ref/a.png,left/a.png,right/a.png");
     const display = document.createElement("div");
     let recorded: Array<{ trialId: string; points: Array<[number, number, number]> }> = [];
+    let recordedResult: TrialResult | undefined;
 
     plugin.trial(display, {
       trial,
@@ -242,7 +244,7 @@ describe("visual similarity task", () => {
       trialNumber: 1,
       totalInPhase: 1,
       prepare: () => Promise.resolve(),
-      onComplete: (_result, points) => { recorded = points; },
+      onComplete: (result, points) => { recordedResult = result; recorded = points; },
     });
     await Promise.resolve();
     display.querySelector<HTMLButtonElement>(".vs-cross")?.dispatchEvent(
@@ -264,6 +266,8 @@ describe("visual similarity task", () => {
     expect(recorded[0].points).toHaveLength(2);
     expect(recorded[0].points[0]).toEqual([0, 0, 0]);
     expect(recorded[0].points[1].slice(1)).toEqual([260, 0]);
+    expect(recordedResult?.stimulusToFirstMoveMs).toBeTypeOf("number");
+    expect(recordedResult?.stimulusToFirstMoveMs).toBeGreaterThanOrEqual(0);
   });
 
   it("uses human-readable alignment feedback during training", () => {

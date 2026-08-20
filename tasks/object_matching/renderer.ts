@@ -141,12 +141,15 @@ export class ObjectMatchingPlugin {
 
     const trialArea = displayElement.querySelector<HTMLElement>(".vs-trial")!;
     const points: PointerTuple[] = parameters.phase === "testing" ? [[0, 0, 0]] : [];
+    let firstMoveAt: number | undefined;
     const onPointerMove = (event: PointerEvent) => {
       if (parameters.phase !== "testing") return;
+      const movedAt = performance.now();
+      firstMoveAt ??= movedAt;
       const point = pointerTupleAtCross(
         { x: event.clientX, y: event.clientY },
         { x: timing.crossClickX, y: timing.crossClickY },
-        performance.now() - timing.crossClickedAt,
+        movedAt - timing.crossClickedAt,
       );
       if (shouldSamplePointer(points.at(-1)!, point)) points.push(point);
     }
@@ -181,6 +184,7 @@ export class ObjectMatchingPlugin {
         crossShownAt: timing.crossShownAt,
         crossClickedAt: timing.crossClickedAt,
         stimulusShownAt,
+        stimulusToFirstMoveMs: firstMoveAt === undefined ? undefined : Math.max(0, firstMoveAt - stimulusShownAt),
         responseAt,
         reactionTimeMs: calculateReactionTimeMs(timing.crossClickedAt, responseAt),
         responseX: event.clientX,

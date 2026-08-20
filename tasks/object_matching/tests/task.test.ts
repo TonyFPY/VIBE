@@ -18,6 +18,7 @@ import {
 } from "../task";
 import { ObjectMatchingPlugin } from "../renderer";
 import { isRecordedPhase } from "../../shared/experiment/types";
+import type { ObjectMatchingTrialResult } from "../../shared/experiment/types";
 
 const header = "trial_id,class_name,reference,candidate_0,candidate_1,candidate_2,candidate_3,candidate_4,candidate_5,candidate_6,candidate_7,correct_label";
 const row = (id: number, correctLabel = 4) => [
@@ -197,6 +198,7 @@ describe("object matching task", () => {
     const display = document.createElement("div");
     const plugin = new ObjectMatchingPlugin({ finishTrial: () => undefined } as never);
     let recorded: Array<{ trialId: string; points: Array<[number, number, number]> }> = [];
+    let recordedResult: ObjectMatchingTrialResult | undefined;
 
     plugin.trial(display, {
       trial,
@@ -204,7 +206,7 @@ describe("object matching task", () => {
       trialNumber: 1,
       totalInPhase: 1,
       prepare: () => Promise.resolve(),
-      onComplete: (_result, points) => { recorded = points; },
+      onComplete: (result, points) => { recordedResult = result; recorded = points; },
     });
     await Promise.resolve();
     display.querySelector<HTMLButtonElement>(".om-cross")?.dispatchEvent(
@@ -225,5 +227,7 @@ describe("object matching task", () => {
     expect(recorded[0].points).toHaveLength(2);
     expect(recorded[0].points[0]).toEqual([0, 0, 0]);
     expect(recorded[0].points[1].slice(1)).toEqual([260, 0]);
+    expect(recordedResult?.stimulusToFirstMoveMs).toBeTypeOf("number");
+    expect(recordedResult?.stimulusToFirstMoveMs).toBeGreaterThanOrEqual(0);
   });
 });
