@@ -70,9 +70,9 @@ Out-of-range coordinates are rejected. They are not clamped or repaired.
 Performance defaults are encoded in
 [`src/config/load-config.ts`](src/config/load-config.ts): the browser waits
 `2000` ms after a batch for stimuli to prepare, provider requests allow
-`120000` ms, and the total run timeout is `1800000` ms. The same module keeps
-the fixed viewport, screenshot, pointer pacing, action, response-size, and
-retry defaults.
+`120000` ms, and the total run timeout is `2700000` ms (45 minutes). The same
+module keeps the fixed viewport, screenshot, pointer pacing, action,
+response-size, and retry defaults.
 
 ## Run
 
@@ -134,39 +134,68 @@ export AGENT_RUNS_DIR=/absolute/path/to/private-runs
 Each provider turn contains only the public participant instruction, the
 current JPEG screenshot, and the declared provider tool schemas. The Gemini
 adapter retains the screenshot-oriented `computer_use` browser context but
-excludes its native pointer and browser-control functions. It exposes two
+excludes its native pointer and browser-control functions. It exposes three
 client-executed custom functions instead:
 
 - `click_visible({ x, y, intent })` for one visible setup or navigation click,
   including Start and Continue pages.
-- `submit_trial_actions({ moves, click })` for a trial-response batch. `moves`
-  contains 9 through 49 normalized pointer coordinates, and `click` is the
-  one final normalized click coordinate.
+- `click_fixation_marker()` for a visible fixation-marker fallback. The
+  harness executes its exact center move and click; Gemini uses this tool when
+  a cross-only screenshot is presented for the model.
+- `submit_trial_actions({ trajectory })` for a trial-response batch. `trajectory`
+  contains 9 through 49 normalized pointer coordinates, and the final point is
+  the response click.
+
+The Gemini Computer Use request does not advertise safety overrides or safety
+metadata in the custom action schemas. If Gemini still attaches a
+`safety_decision`, the adapter automatically acknowledges every non-blocking
+decision for the authorized experiment action and continues to reject blocked
+decisions and all other unknown arguments.
 
 The first screenshot is captured on the instructions page, before the setup
 Start action. Each Gemini interaction returns a custom function call whose
 actions are flattened in order. The harness rejects native pointer calls and
 any flattened batch over 50 actions, then executes the accepted actions through
 Playwright. A trial batch therefore contains 10 through 50 actions: the 9–49
-explicit moves followed by the final click. No intermediate screenshots are
-captured while a batch executes.
+trajectory points followed by a click at the final point. No intermediate screenshots are
+captured while a batch executes. The readiness move/click is logged separately
+and remains excluded from the established `actionCount`; the 10–50 limit
+applies only to each trial-response batch. The harness also rejects a trial
+batch whose final click falls inside the middle reference tile; no
+part of that invalid batch is sent to Playwright.
 
-After execution, the harness settles and checks completion, performs
-controller-owned center fixation if the experiment is still active, and
-captures one fresh screenshot. Navigation batches continue the current
-provider interaction with grouped per-action results, so Continue pages follow
-the same rule as Start. After a successful trial batch, the Gemini adapter
-resets its provider interaction and the next request receives only the fresh
-screenshot and public instruction. This keeps the conversation context bounded
-without exposing page state or replaying browser actions. Providers that do
-not implement context reset retain the grouped-result continuation behavior.
+When the harness rejects a parsed batch, it logs the rejected actions but does
+not send that custom function call back to Gemini as if it had executed. For
+providers with `resetContext`, it discards the invalid interaction, appends a
+correction to the public instruction, captures a fresh screenshot, and requests
+the retry in a fresh interaction. The correction is refreshed on every consecutive retry and
+includes the retry number; for a trial-reference rejection it explicitly says
+not to repeat the middle reference-tile click and to finish on a surrounding
+candidate tile. This avoids provider safety blocks caused
+by continuing a rejected custom action and guarantees that rejected browser
+actions are never replayed.
+
+After a setup/navigation or loading-wait batch, the harness settles and checks
+completion, then captures one fresh screenshot without inserting center
+fixation. Gemini must wait when that screenshot still shows “Preparing trial…”
+and must not submit a trial batch until the fixation marker is visibly present.
+After a successful trial batch, the Gemini adapter resets its provider
+interaction and receives the next cross-only screenshot. It must request and
+execute `click_fixation_marker` before receiving the response-grid screenshot for the
+next response. Only a stimulus screenshot may be used to generate the
+`submit_trial_actions` batch. Navigation batches continue the current provider
+interaction with grouped per-action results, so Continue pages follow the same
+rule as Start. This keeps the conversation context bounded without exposing
+page state or replaying browser actions.
 The provider-neutral `ComputerUseAgent` interface still exposes only
-screenshot observations, a navigation/trial batch kind, and coordinate actions.
+screenshot observations, navigation/fixation/trial/wait batch kinds, and
+coordinate actions.
 
 Gemini's native `wait_5_seconds` action is also accepted as a single loading
 wait. It is used only when the visible page says it is preparing or loading;
 the harness waits, captures a fresh screenshot, and does not insert a center
-fixation click. It is never part of a trial-response batch.
+fixation click. Gemini may repeat the wait if the next screenshot is still
+loading. It is never part of a trial-response batch.
 
 If Gemini returns malformed or policy-invalid action output, the harness marks
 that provider turn recoverable, logs it, resets the Gemini interaction, and
@@ -176,6 +205,33 @@ turn is sent to Playwright. Safety, authentication, and other terminal
 provider failures still stop the run; exhausting the three correction attempts
 returns an incomplete run rather than pretending the trial succeeded.
 
+Policy-invalid batches also increment `invalidActionCount` for the run record,
+but `maxInvalidActions` is a consecutive safety limit. It resets after any
+valid batch executes, so isolated model mistakes across a long experiment do
+not terminate the run; a model that remains invalid for the configured streak
+still stops safely without sending the rejected batch to Playwright.
+
+Gemini can also intermittently reject a continuation with HTTP 400 and an
+“Input blocked” action-policy message (including “unsupported action,” “test
+harness specific action,” or the cross-only/`submit_trial_actions`
+contradiction) even after earlier custom action calls succeeded.
+The adapter classifies these known provider action-policy errors as a
+provider-request recovery: the run resets the interaction, keeps the latest
+screen observation, and starts a fresh `next` request without replaying browser
+actions or appending a malformed-output correction. It allows three such
+recoveries, logs them as `provider-request-recovery`, and then returns an
+incomplete run. Other HTTP 400 errors remain terminal.
+
+After every trial batch, the run loop compares the previous and next visible
+screenshots. If they are unchanged, the response likely did not register (for
+example, the model clicked the non-interactive middle reference tile). The loop keeps
+the phase as `trial`, resets the provider interaction, and retries from that
+fresh screenshot instead of treating the next response as setup. It allows
+three no-progress recoveries, logs `trial-no-progress-recovery`, and then
+returns an incomplete run without counting those batches as invalid actions.
+This uses screenshot bytes only and does not inspect the DOM or hidden task
+state.
+
 For Gemini and other providers that implement context reset, a provider
 timeout causes the run loop to abandon the pending interaction, start one
 fresh request from the latest screenshot, and never replay the
@@ -184,7 +240,9 @@ provider failure. Providers without context reset retain the existing terminal
 timeout behavior.
 
 The setup/navigation phase accepts exactly one action: the `click_visible` click.
-Loading screens may use the separate one-action `wait_5_seconds` batch.
+Fixation is exactly one exact viewport-center move followed by a click from
+`click_fixation_marker`. Loading screens may use the separate one-action
+`wait_5_seconds` batch.
 Pointer movement uses non-interpolated Playwright steps by default. The
 runtime defaults are encoded in `src/config/load-config.ts`:
 
@@ -200,7 +258,7 @@ the setting that affects trajectory sampling.
 
 The trial action budget is defined in `src/actions/policy.ts`:
 `MIN_TRIAL_BATCH_ACTIONS` is `10` and `MAX_BATCH_ACTIONS` is `50`. The Gemini
-schema and parser derive the move limits (`9` through `49`) from those totals.
+schema and parser derive the trajectory-point limits (`9` through `49`) from those totals.
 Change those two policy constants to adjust the total trial budget; the
 navigation click remains exactly one action.
 

@@ -38,8 +38,11 @@ class FakeGeminiTransport implements GeminiTransport {
       functionCall("click_visible", { x: 500, y: 500, intent: "start the visible task" }, "setup-click"),
     ], "interaction-1"),
     interaction([
+      functionCall("click_fixation_marker", {}, "fixation-click"),
+    ], "interaction-2"),
+    interaction([
       functionCall("submit_trial_actions", {
-        moves: [
+        trajectory: [
           { x: 648, y: 518 },
           { x: 649, y: 519 },
           { x: 650, y: 520 },
@@ -48,11 +51,10 @@ class FakeGeminiTransport implements GeminiTransport {
           { x: 653, y: 523 },
           { x: 654, y: 524 },
           { x: 655, y: 525 },
-          { x: 656, y: 526 },
+          { x: 700, y: 572 },
         ],
-        click: { x: 700, y: 572 },
       }, "trial-batch"),
-    ], "interaction-2"),
+    ], "interaction-3"),
   ];
 
   async invoke(request: GeminiTransportRequest): Promise<unknown> {
@@ -164,7 +166,7 @@ describe("deterministic Playwright run", () => {
     await host.close();
 
     expect(summary.status).toBe("completed");
-    expect(summary).toMatchObject({ actionCount: 11, observationCount: 2 });
+    expect(summary).toMatchObject({ actionCount: 11, observationCount: 3 });
     expect(receivedEvents).toEqual([
       "fixation",
       "move:540,337.5",
@@ -176,19 +178,27 @@ describe("deterministic Playwright run", () => {
       "move:705,353",
       "move:706,353",
       "move:707,354",
-      "move:708,355",
+      "move:756,386",
       "move:756,386",
       "response:756,386",
     ]);
     expect(resultMethods).toEqual(["POST"]);
-    expect(reportedResults).toEqual([[{ action: { type: "click", x: 540, y: 337 }, status: "executed" }]]);
+    expect(reportedResults).toEqual([
+      [{ action: { type: "click", x: 540, y: 337 }, status: "executed" }],
+      [
+        { action: { type: "move", x: 540, y: 337.5 }, status: "executed" },
+        { action: { type: "click", x: 540, y: 337.5 }, status: "executed" },
+      ],
+    ]);
     const serializedInitialTools = JSON.stringify(transport.requests[0].tools);
     expect(serializedInitialTools).toContain('"name":"click_visible"');
+    expect(serializedInitialTools).toContain('"name":"click_fixation_marker"');
     expect(serializedInitialTools).toContain('"name":"submit_trial_actions"');
     expect(serializedInitialTools).not.toContain('"name":"click"');
     expect(serializedInitialTools).not.toContain('"name":"move"');
     const serializedContinuationTools = JSON.stringify(transport.requests[1].tools);
     expect(serializedContinuationTools).toContain('"name":"click_visible"');
+    expect(serializedContinuationTools).toContain('"name":"click_fixation_marker"');
     expect(serializedContinuationTools).toContain('"name":"submit_trial_actions"');
     expect(serializedContinuationTools).not.toContain('"name":"click"');
     expect(serializedContinuationTools).not.toContain('"name":"move"');

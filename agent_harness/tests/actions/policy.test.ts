@@ -33,6 +33,25 @@ describe("computer action viewport and wait policy", () => {
     ).toEqual({ valid: true });
   });
 
+  it("accepts only an exact center move followed by a center click as fixation", () => {
+    expect(validateComputerActionBatch(
+      [
+        { type: "move", x: viewport.width / 2, y: viewport.height / 2 },
+        { type: "click", x: viewport.width / 2, y: viewport.height / 2 },
+      ],
+      viewport,
+      "fixation" as never,
+    )).toEqual({ valid: true });
+    expect(validateComputerActionBatch(
+      [
+        { type: "move", x: viewport.width / 2 + 1, y: viewport.height / 2 },
+        { type: "click", x: viewport.width / 2, y: viewport.height / 2 },
+      ],
+      viewport,
+      "fixation" as never,
+    )).toMatchObject({ valid: false });
+  });
+
   it("accepts exactly one five-second wait batch outside trial responses", () => {
     expect(validateComputerActionBatch([{ type: "wait", milliseconds: 5000 }], viewport, "wait" as never))
       .toEqual({ valid: true });
@@ -69,6 +88,22 @@ describe("computer action viewport and wait policy", () => {
     })), { type: "click" as const, x: 20, y: 20 }];
 
     expect(validateComputerActionBatch(actions, viewport, "trial")).toEqual({ valid: true });
+  });
+
+  it("rejects a trial response click on the middle reference tile", () => {
+    const actions = [
+      ...Array.from({ length: MIN_TRIAL_BATCH_ACTIONS - 1 }, (_, index) => ({
+        type: "move" as const,
+        x: index,
+        y: index,
+      })),
+      { type: "click" as const, x: viewport.width / 2, y: viewport.height / 2 },
+    ];
+
+    expect(validateComputerActionBatch(actions, viewport, "trial")).toEqual({
+      valid: false,
+      error: "Trial final click must target a surrounding candidate tile, not the middle reference tile",
+    });
   });
 
   it("accepts the maximum batch size and rejects one action beyond it", () => {

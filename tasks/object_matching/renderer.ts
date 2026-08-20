@@ -30,8 +30,8 @@ export class ObjectMatchingInstructionPlugin {
       <section class="vs-card vs-instructions">
         <p class="vs-eyebrow">Object matching</p>
         <h2>Which object belongs with the reference?</h2>
-        <p>Click the center cross to start each trial.</p>
-        <p>Click one image around the centered reference.</p>
+        <p>Click the fixation marker (+) to start each trial.</p>
+        <p>Click one surrounding candidate tile around the middle reference tile.</p>
         <p>You will start with some training trials. </p>
         <p>Please do not refresh or close this window.</p>
         <button class="vs-primary" type="button">Start</button>

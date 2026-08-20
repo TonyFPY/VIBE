@@ -12,6 +12,8 @@ import {
   splitExperimentPhases,
   toPublicTrial,
   isTrialViewportSupported,
+  type RunMode,
+  type TrialPhases,
 } from "../task";
 import { InstructionPlugin, TestReadyPlugin, VisualSimilarityPlugin } from "../renderer";
 import { trainingAlignmentFeedback } from "../task";
@@ -91,6 +93,49 @@ describe("visual similarity task", () => {
       testing: phases.testing.slice(0, 10),
     });
     expect(selectRunPhases(phases, "full")).toEqual(phases);
+  });
+
+  it("shuffles only the testing phase when a session seed is supplied", () => {
+    const rows = parseDreamSimCsv(
+      "id,left_vote,right_vote,ref_path,left_path,right_path\n" +
+        Array.from({ length: 15 }, (_, index) => `${index + 1},1,0,ref/${index}.png,left/${index}.png,right/${index}.png`).join("\n"),
+    );
+    const phases = splitExperimentPhases(rows);
+    const selectWithSeed = selectRunPhases as unknown as (
+      phases: TrialPhases,
+      mode: RunMode,
+      seed: string,
+    ) => TrialPhases;
+
+    const shuffled = selectWithSeed(phases, "full", "session-001");
+
+    expect(shuffled.training).toEqual(phases.training);
+    expect(shuffled.testing).toHaveLength(12);
+    expect(shuffled.testing.map((trial) => trial.id)).not.toEqual(phases.testing.map((trial) => trial.id));
+    expect(shuffled.testing.map((trial) => trial.id)).toEqual(
+      selectWithSeed(phases, "full", "session-001").testing.map((trial) => trial.id),
+    );
+  });
+
+  it("shuffles the selected development testing rows without adding later rows", () => {
+    const rows = parseDreamSimCsv(
+      "id,left_vote,right_vote,ref_path,left_path,right_path\n" +
+        Array.from({ length: 15 }, (_, index) => `${index + 1},1,0,ref/${index}.png,left/${index}.png,right/${index}.png`).join("\n"),
+    );
+    const phases = splitExperimentPhases(rows);
+    const selectWithSeed = selectRunPhases as unknown as (
+      phases: TrialPhases,
+      mode: RunMode,
+      seed: string,
+    ) => TrialPhases;
+
+    const selected = selectWithSeed(phases, "development", "session-001");
+
+    expect(selected.training).toEqual(phases.training);
+    expect(selected.testing).toHaveLength(10);
+    expect(new Set(selected.testing.map((trial) => trial.id))).toEqual(
+      new Set(phases.testing.slice(0, 10).map((trial) => trial.id)),
+    );
   });
 
   it("scores a selected candidate against the private target side", () => {

@@ -36,13 +36,52 @@ class AgentRequestTimeoutError extends Error {
 }
 
 const MAX_MODEL_OUTPUT_RECOVERY_RETRIES = 3;
+const MAX_PROVIDER_REQUEST_RECOVERY_RETRIES = 3;
+const MAX_TRIAL_NO_PROGRESS_RECOVERY_RETRIES = 3;
 const MODEL_OUTPUT_RECOVERY_MARKER = "Recovery instruction: the previous model output was rejected by the harness.";
+const TRIAL_NO_PROGRESS_RECOVERY_MARKER = "Recovery instruction: the previous trial response did not change the visible screen.";
 const MODEL_OUTPUT_RECOVERY_INSTRUCTION = [
   MODEL_OUTPUT_RECOVERY_MARKER,
   "Do not describe the action in prose.",
   "Return a valid action batch using only the declared tools.",
-  "For a trial response, provide the required visible moves followed by one final click.",
+  "For a trial response, provide the required visible trajectory points; the final trajectory point is the response click.",
 ].join(" ");
+const TRIAL_NO_PROGRESS_RECOVERY_INSTRUCTION = [
+  TRIAL_NO_PROGRESS_RECOVERY_MARKER,
+  "Do not repeat the previous response path.",
+  "The previous final click landed on the middle reference tile and did not submit a response.",
+  "Choose one of the surrounding candidate tiles; do not click the fixation marker or the middle reference tile.",
+  "Return a fresh trial trajectory with the required visible points and finish inside one surrounding candidate tile.",
+].join(" ");
+const INVALID_ACTION_RECOVERY_MARKER = "Recovery instruction: the previous action batch was rejected by the harness.";
+
+function invalidActionRecoveryInstruction(
+  phase: ActionBatchPhase,
+  attempt: number,
+  maxAttempts: number,
+  rejection: string,
+): string {
+  const referenceClickRejected = rejection.includes("reference image") || rejection.includes("reference frame") || rejection.includes("reference tile");
+  const phaseGuidance = phase === "trial"
+    ? [
+      `This is trial recovery attempt ${attempt} of ${maxAttempts}.`,
+      ...(referenceClickRejected ? ["Do not repeat the rejected middle reference-tile click."] : []),
+      "The final click must land on one of the surrounding candidate tiles, not the middle reference tile; do not click the fixation marker.",
+      "Re-plan the full move path from the current screenshot and finish at that candidate.",
+    ]
+    : [
+      `This is ${phase} recovery attempt ${attempt} of ${maxAttempts}.`,
+      "Re-plan the action from the current screenshot and do not repeat the rejected action.",
+    ];
+  return [
+    INVALID_ACTION_RECOVERY_MARKER,
+    "No action from the rejected batch was executed.",
+    "Start again from the current screenshot using a fresh action batch.",
+    "Use only the action that matches the visible screen: wait while preparing, click the visible fixation marker on a fixation-marker screen, or submit trial actions only when the response grid and candidate tiles are visible.",
+    ...phaseGuidance,
+    `Harness rejection: ${rejection}`,
+  ].join(" ");
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown harness failure";
@@ -59,6 +98,14 @@ function rawProviderOutputWithoutResponseBodies(rawProviderOutput: unknown): unk
     key,
     /response.?body|body/i.test(key) ? "[REDACTED]" : rawProviderOutputWithoutResponseBodies(value),
   ]));
+}
+
+function screenshotsEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 
 export class RunLoop {
@@ -176,32 +223,42 @@ export class RunLoop {
       );
       let phase: ActionBatchPhase = "setup";
       let outputRecoveryAttempts = 0;
+      let providerRequestRecoveryAttempts = 0;
+      let trialNoProgressRecoveryAttempts = 0;
+      let consecutiveInvalidActionCount = 0;
 
       while (turn) {
         if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
         if (turn.status === "recoverable") {
-          if (outputRecoveryAttempts >= MAX_MODEL_OUTPUT_RECOVERY_RETRIES) {
+          const providerRequestRecovery = turn.recoveryKind === "provider-request";
+          const attempts = providerRequestRecovery ? providerRequestRecoveryAttempts : outputRecoveryAttempts;
+          const maxAttempts = providerRequestRecovery
+            ? MAX_PROVIDER_REQUEST_RECOVERY_RETRIES
+            : MAX_MODEL_OUTPUT_RECOVERY_RETRIES;
+          if (attempts >= maxAttempts) {
             summary = {
               ...summary,
               status: "incomplete",
-              failureReason: `model output recovery exhausted after ${MAX_MODEL_OUTPUT_RECOVERY_RETRIES} attempts${turn.failureReason ? `: ${turn.failureReason}` : ""}`,
+              failureReason: `${providerRequestRecovery ? "provider request" : "model output"} recovery exhausted after ${maxAttempts} attempts${turn.failureReason ? `: ${turn.failureReason}` : ""}`,
             };
             break;
           }
-          outputRecoveryAttempts += 1;
+          const attempt = attempts + 1;
+          if (providerRequestRecovery) providerRequestRecoveryAttempts = attempt;
+          else outputRecoveryAttempts = attempt;
           await this.dependencies.logger.log({
-            type: "provider-output-recovery",
+            type: providerRequestRecovery ? "provider-request-recovery" : "provider-output-recovery",
             at: this.nowIso(),
             step: summary.stepCount,
-            attempt: outputRecoveryAttempts,
-            maxAttempts: MAX_MODEL_OUTPUT_RECOVERY_RETRIES,
+            attempt,
+            maxAttempts,
             reason: turn.failureReason ?? "provider returned an invalid model output",
           });
           if (!this.dependencies.agent.resetContext) {
             summary = {
               ...summary,
               status: "incomplete",
-              failureReason: "model output recovery requires provider context reset",
+              failureReason: `${providerRequestRecovery ? "provider request" : "model output"} recovery requires provider context reset`,
             };
             break;
           }
@@ -210,14 +267,16 @@ export class RunLoop {
             type: "provider-context-reset",
             at: this.nowIso(),
             step: summary.stepCount,
-            reason: "provider-output-recovery",
+            reason: providerRequestRecovery ? "provider-request-recovery" : "provider-output-recovery",
           });
-          observation = {
-            ...observation,
-            publicInstruction: observation.publicInstruction.includes(MODEL_OUTPUT_RECOVERY_MARKER)
-              ? observation.publicInstruction
-              : `${observation.publicInstruction}\n\n${MODEL_OUTPUT_RECOVERY_INSTRUCTION}`,
-          };
+          if (!providerRequestRecovery) {
+            observation = {
+              ...observation,
+              publicInstruction: observation.publicInstruction.includes(MODEL_OUTPUT_RECOVERY_MARKER)
+                ? observation.publicInstruction
+                : `${observation.publicInstruction}\n\n${MODEL_OUTPUT_RECOVERY_INSTRUCTION}`,
+            };
+          }
           turn = await this.callProvider(
             "next",
             observation,
@@ -243,6 +302,8 @@ export class RunLoop {
         const validationStartedAt = this.nowMs();
         const validationPhase = turn.actionBatchType === "navigation"
           ? "setup"
+          : turn.actionBatchType === "fixation"
+            ? "fixation"
           : turn.actionBatchType === "wait"
             ? "wait"
             : phase;
@@ -250,6 +311,7 @@ export class RunLoop {
         timing.parseAndValidate.observe(this.nowMs() - validationStartedAt);
         if (!actionValidation.valid) {
           summary.invalidActionCount += 1;
+          consecutiveInvalidActionCount += 1;
           const rejectedResults: ActionResult[] = rejectedActionsFor(turn.actions).map((action) => ({
             action,
             status: "rejected",
@@ -257,6 +319,49 @@ export class RunLoop {
           }));
           for (const [index, result] of rejectedResults.entries()) {
             await this.logAction(summary.stepCount, result.action, false, actionValidation.error, index + 1, rejectedResults.length);
+          }
+          if (consecutiveInvalidActionCount >= config.maxInvalidActions) {
+            if (setTerminalFromBackend() || setTimeoutIfExpired() || summary.status === "step_limit") break;
+            summary = { ...summary, status: "incomplete", failureReason: "invalid action limit reached" };
+            break;
+          }
+          if (this.dependencies.agent.resetContext) {
+            await this.dependencies.agent.resetContext();
+            await this.dependencies.logger.log({
+              type: "provider-context-reset",
+              at: this.nowIso(),
+              step: summary.stepCount,
+              reason: "invalid-action-recovery",
+            });
+            const recoveryInstruction = invalidActionRecoveryInstruction(
+              validationPhase,
+              consecutiveInvalidActionCount,
+              config.maxInvalidActions,
+              actionValidation.error,
+            );
+            observation = await this.captureObservation(
+              session,
+              config,
+              publicInstruction,
+              summary,
+              timing.screenshotAndLog,
+            );
+            observation = {
+              ...observation,
+              publicInstruction: `${observation.publicInstruction}\n\n${recoveryInstruction}`,
+            };
+            turn = await this.callProvider(
+              "next",
+              observation,
+              undefined,
+              config,
+              timing.provider,
+              summary,
+              setTerminalFromBackend,
+              setTimeoutIfExpired,
+              setStepLimitIfReached,
+            );
+            continue;
           }
           const reportedTurn = await this.callProvider(
             "reportActionResults",
@@ -269,27 +374,23 @@ export class RunLoop {
             setTimeoutIfExpired,
             setStepLimitIfReached,
           );
-          if (summary.invalidActionCount >= config.maxInvalidActions) {
-            if (setTerminalFromBackend() || setTimeoutIfExpired() || summary.status === "step_limit") break;
-            if (reportedTurn?.status === "blocked") {
-              summary = { ...summary, status: "failed", failureReason: reportedTurn.failureReason ?? "provider blocked" };
-              break;
-            }
-            if (reportedTurn?.status === "finished") {
-              summary = {
-                ...summary,
-                status: "incomplete",
-                failureReason: reportedTurn.failureReason ?? "provider finished before result response",
-              };
-              break;
-            }
-            summary = { ...summary, status: "incomplete", failureReason: "invalid action limit reached" };
+          if (reportedTurn?.status === "blocked") {
+            summary = { ...summary, status: "failed", failureReason: reportedTurn.failureReason ?? "provider blocked" };
+            break;
+          }
+          if (reportedTurn?.status === "finished") {
+            summary = {
+              ...summary,
+              status: "incomplete",
+              failureReason: reportedTurn.failureReason ?? "provider finished before result response",
+            };
             break;
           }
           turn = reportedTurn;
           continue;
         }
 
+        const previousScreenshot = observation.screenshot;
         const actionStartedAt = this.nowMs();
         const execution = await executeComputerActionBatch(session, turn.actions, this.sleep);
         for (const [index, result] of execution.results.entries()) {
@@ -303,31 +404,71 @@ export class RunLoop {
           );
         }
         timing.actionAndLog.observe(this.nowMs() - actionStartedAt);
-        summary.actionCount += execution.results.filter((result) => result.status === "executed").length;
+        if (turn.actionBatchType !== "fixation") {
+          summary.actionCount += execution.results.filter((result) => result.status === "executed").length;
+        }
         if (execution.failed) {
           const failure = execution.results.find((result) => result.status === "failed");
           summary = { ...summary, status: "failed", failureReason: failure?.error ?? "Action execution failed" };
           break;
         }
+        consecutiveInvalidActionCount = 0;
         outputRecoveryAttempts = 0;
+        providerRequestRecoveryAttempts = 0;
         const settleStartedAt = this.nowMs();
         await this.sleep(config.performance.settleDelayMs);
         timing.settle.observe(this.nowMs() - settleStartedAt);
         if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
-        if (turn.actionBatchType !== "wait") {
-          await this.beginFixation(session, config, summary, timing.actionAndLog);
-          if (setTerminalFromBackend() || setTimeoutIfExpired()) break;
-        }
         observation = await this.captureObservation(session, config, publicInstruction, summary, timing.screenshotAndLog);
         if (setTerminalFromBackend() || setTimeoutIfExpired() || setStepLimitIfReached()) break;
-        if (turn.actionBatchType !== "wait") phase = "trial";
+        const trialMadeNoVisibleProgress = turn.actionBatchType === "trial"
+          && screenshotsEqual(previousScreenshot, observation.screenshot);
+        if (turn.actionBatchType === "fixation") {
+          phase = "trial";
+          trialNoProgressRecoveryAttempts = 0;
+        } else if (turn.actionBatchType === "trial") {
+          if (trialMadeNoVisibleProgress) {
+            if (trialNoProgressRecoveryAttempts >= MAX_TRIAL_NO_PROGRESS_RECOVERY_RETRIES) {
+              summary = {
+                ...summary,
+                status: "incomplete",
+                failureReason: `trial no-progress recovery exhausted after ${MAX_TRIAL_NO_PROGRESS_RECOVERY_RETRIES} attempts`,
+              };
+              break;
+            }
+            trialNoProgressRecoveryAttempts += 1;
+            phase = "trial";
+            observation = {
+              ...observation,
+              publicInstruction: observation.publicInstruction.includes(TRIAL_NO_PROGRESS_RECOVERY_MARKER)
+                ? observation.publicInstruction
+                : `${observation.publicInstruction}\n\n${TRIAL_NO_PROGRESS_RECOVERY_INSTRUCTION}`,
+            };
+            await this.dependencies.logger.log({
+              type: "trial-no-progress-recovery",
+              at: this.nowIso(),
+              step: summary.stepCount,
+              attempt: trialNoProgressRecoveryAttempts,
+              maxAttempts: MAX_TRIAL_NO_PROGRESS_RECOVERY_RETRIES,
+              reason: "trial screenshot did not change after the executed response batch",
+            });
+          } else {
+            phase = "setup";
+            trialNoProgressRecoveryAttempts = 0;
+          }
+        } else if (turn.actionBatchType === "navigation") {
+          phase = "setup";
+          trialNoProgressRecoveryAttempts = 0;
+        } else if (turn.actionBatchType !== "wait") {
+          phase = "trial";
+        }
         if (turn.actionBatchType === "trial" && this.dependencies.agent.resetContext) {
           await this.dependencies.agent.resetContext();
           await this.dependencies.logger.log({
             type: "provider-context-reset",
             at: this.nowIso(),
             step: summary.stepCount,
-            reason: "trial-boundary",
+            reason: trialMadeNoVisibleProgress ? "trial-no-progress-recovery" : "trial-boundary",
           });
           turn = await this.callProvider(
             "next",
@@ -417,29 +558,6 @@ export class RunLoop {
     });
     timing.observe(this.nowMs() - startedAt);
     return { screenshot, mimeType: "image/jpeg", publicInstruction };
-  }
-
-  private async beginFixation(
-    session: BrowserSession,
-    config: HarnessConfig,
-    summary: RunSummary,
-    timing: TimingHistogram,
-  ): Promise<void> {
-    const startedAt = this.nowMs();
-    const x = config.viewport.width / 2;
-    const y = config.viewport.height / 2;
-    await session.move(x, y);
-    await session.click(x, y);
-    await this.dependencies.logger.log({
-      type: "fixation",
-      at: this.nowIso(),
-      step: summary.stepCount,
-      x,
-      y,
-      purpose: "fixation",
-      actionValid: true,
-    });
-    timing.observe(this.nowMs() - startedAt);
   }
 
   private async logAction(
@@ -552,6 +670,7 @@ export class RunLoop {
         method,
         status: turn.status,
         providerIntent: turn.providerIntent,
+        recoveryKind: turn.recoveryKind,
         rawProviderOutput: rawProviderOutputWithoutResponseBodies(turn.rawProviderOutput),
         modelRequestStartedAt: providerStartedAt,
         modelResponseCompletedAt: providerCompletedAt,

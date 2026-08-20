@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ActionResult, AgentObservation } from "../../src/actions/contract";
 import { MAX_TRIAL_MOVES, MIN_TRIAL_MOVES } from "../../src/actions/policy";
 import { GeminiComputerUseAgent, normalizeGeminiCoordinate } from "../../src/providers/gemini-computer-use";
-import type { GeminiTransport } from "../../src/providers/gemini-transport";
+import { GeminiHttpError, type GeminiTransport } from "../../src/providers/gemini-transport";
 
 const viewport = { width: 1080, height: 675 } as const;
 const observation: AgentObservation = {
@@ -29,8 +29,8 @@ function functionCall(name: string, arguments_: unknown, id = "call-1"): unknown
   return { type: "function_call", id, name, arguments: arguments_ };
 }
 
-function trialArguments(moves: unknown[]): unknown {
-  return { moves, click: { x: 999, y: 999 } };
+function trialArguments(trajectory: unknown[]): unknown {
+  return { trajectory };
 }
 
 function fakeTransport(...responses: unknown[]): GeminiTransport & { readonly requests: unknown[] } {
@@ -91,16 +91,26 @@ describe("GeminiComputerUseAgent", () => {
         }),
         expect.objectContaining({
           type: "function",
+          name: "click_fixation_marker",
+          parameters: expect.objectContaining({ required: [] }),
+        }),
+        expect.objectContaining({
+          type: "function",
           name: "submit_trial_actions",
           parameters: expect.objectContaining({
-            required: ["moves", "click"],
+            required: ["trajectory"],
             properties: expect.objectContaining({
-              moves: expect.objectContaining({ minItems: MIN_TRIAL_MOVES, maxItems: MAX_TRIAL_MOVES }),
+              trajectory: expect.objectContaining({ minItems: MIN_TRIAL_MOVES, maxItems: MAX_TRIAL_MOVES }),
             }),
           }),
         }),
       ]),
     })]);
+    const customTools = (transport.requests[0] as { tools: Array<Record<string, any>> }).tools
+      .filter((tool) => tool.type === "function");
+    for (const customTool of customTools) {
+      expect(customTool.parameters.properties).not.toHaveProperty("safety_decision");
+    }
   });
 
   it("classifies an oversized provider response as recoverable", async () => {
@@ -118,6 +128,94 @@ describe("GeminiComputerUseAgent", () => {
     });
   });
 
+  it("turns an unsupported-action 400 into a provider-request recovery turn", async () => {
+    const requests: unknown[] = [];
+    const transport: GeminiTransport & { readonly requests: unknown[] } = {
+      requests,
+      async invoke(request) {
+        requests.push(request);
+        throw new GeminiHttpError(
+          400,
+          "400 Input blocked: I cannot perform this action because it is an unsupported action. "
+            + "I can only use `click_visible`, `wait_5_seconds`, and `click_fixation_marker`.",
+        );
+      },
+    };
+
+    await expect(agent(transport).next(observation, new AbortController().signal)).resolves.toMatchObject({
+      status: "recoverable",
+      recoveryKind: "provider-request",
+      actions: [],
+      failureReason: expect.stringContaining("unsupported action"),
+    });
+    expect(requests).toHaveLength(1);
+  });
+
+  it("turns a test-harness-specific-action 400 into a provider-request recovery turn", async () => {
+    const transport: GeminiTransport = {
+      async invoke() {
+        throw new GeminiHttpError(
+          400,
+          "400 Input blocked: I cannot take this action because it appears to be a test harness specific action "
+            + "that is not meant for real-world browsing.",
+        );
+      },
+    };
+
+    await expect(agent(transport).next(observation, new AbortController().signal)).resolves.toMatchObject({
+      status: "recoverable",
+      recoveryKind: "provider-request",
+      actions: [],
+      failureReason: expect.stringContaining("test harness specific action"),
+    });
+  });
+
+  it("turns a cross-only tool-policy 400 into a provider-request recovery turn", async () => {
+    const transport: GeminiTransport = {
+      async invoke() {
+        throw new GeminiHttpError(
+          400,
+          "400 Input blocked: I cannot perform this action because the task explicitly states that I should not use "
+            + "`submit_trial_actions` when a cross-only screenshot is presented.",
+        );
+      },
+    };
+
+    await expect(agent(transport).next(observation, new AbortController().signal)).resolves.toMatchObject({
+      status: "recoverable",
+      recoveryKind: "provider-request",
+      actions: [],
+      failureReason: expect.stringContaining("cross-only screenshot"),
+    });
+  });
+
+  it("classifies an unsupported-action 400 during continuation without replaying the result", async () => {
+    const requests: unknown[] = [];
+    let invocationCount = 0;
+    const transport: GeminiTransport & { readonly requests: unknown[] } = {
+      requests,
+      async invoke(request) {
+        requests.push(request);
+        invocationCount += 1;
+        if (invocationCount === 1) {
+          return interaction([functionCall("click_visible", { x: 500, y: 500, intent: "start" })]);
+        }
+        throw new GeminiHttpError(400, "400 Input blocked: unsupported action");
+      },
+    };
+    const computerUseAgent = agent(transport);
+    const signal = new AbortController().signal;
+    const firstTurn = await computerUseAgent.next(observation, signal);
+    const results: readonly ActionResult[] = firstTurn.actions.map((action) => ({ action, status: "executed" }));
+
+    await expect(computerUseAgent.reportActionResults(observation, results, signal)).resolves.toMatchObject({
+      status: "recoverable",
+      recoveryKind: "provider-request",
+      actions: [],
+    });
+    expect(requests[1]).toMatchObject({ previous_interaction_id: "interaction-1" });
+  });
+
   it("advertises integer normalized coordinate bounds and descriptions for every custom coordinate", async () => {
     const transport = fakeTransport(interaction([
       functionCall("click_visible", { x: 700, y: 500, intent: "start" }),
@@ -131,10 +229,8 @@ describe("GeminiComputerUseAgent", () => {
     const coordinateSchemas = [
       clickSchema.properties.x,
       clickSchema.properties.y,
-      trialSchema.properties.moves.items.properties.x,
-      trialSchema.properties.moves.items.properties.y,
-      trialSchema.properties.click.properties.x,
-      trialSchema.properties.click.properties.y,
+      trialSchema.properties.trajectory.items.properties.x,
+      trialSchema.properties.trajectory.items.properties.y,
     ];
 
     for (const schema of coordinateSchemas) {
@@ -220,6 +316,11 @@ describe("GeminiComputerUseAgent", () => {
       { type: "image", data: "/9j/", mime_type: "image/jpeg" },
     ]);
     expect((request.input[0] as { text: string }).text).toContain("Start or Continue");
+    expect((request.input[0] as { text: string }).text).toContain("fixation marker is visibly present");
+    expect((request.input[0] as { text: string }).text).toContain("click_fixation_marker");
+    expect((request.input[0] as { text: string }).text).toContain("stimuli");
+    expect((request.input[0] as { text: string }).text).toContain("wait_5_seconds");
+    expect((request.input[0] as { text: string }).text).toContain("middle tile labeled reference is not a response target");
     expect(request.tools[0]).toEqual({
       type: "computer_use",
       environment: "browser",
@@ -264,6 +365,19 @@ describe("GeminiComputerUseAgent", () => {
     });
   });
 
+  it("parses the fixation-marker tool into an exact fixation move and click", async () => {
+    await expect(agent(fakeTransport(interaction([
+      functionCall("click_fixation_marker", {}),
+    ]))).next(observation, new AbortController().signal)).resolves.toMatchObject({
+      status: "actions",
+      actionBatchType: "fixation",
+      actions: [
+        { type: "move", x: 540, y: 337.5 },
+        { type: "click", x: 540, y: 337.5 },
+      ],
+    });
+  });
+
   it("blocks a new observation until custom function results are reported", async () => {
     const transport = fakeTransport(interaction([
       functionCall("click_visible", { x: 500, y: 500, intent: "start" }),
@@ -281,7 +395,7 @@ describe("GeminiComputerUseAgent", () => {
     expect(transport.requests).toHaveLength(1);
   });
 
-  it("flattens nine trial moves and the final click in order", async () => {
+  it("flattens nine trajectory points and clicks the final point", async () => {
     const turn = await agent(fakeTransport(interaction([
       functionCall("submit_trial_actions", trialArguments([
         { x: 0, y: 0 },
@@ -309,7 +423,24 @@ describe("GeminiComputerUseAgent", () => {
         { type: "move", x: 648, y: 405 },
         { type: "move", x: 756, y: 472 },
         { type: "move", x: 864, y: 540 },
-        { type: "click", x: 1078, y: 674 },
+        { type: "click", x: 864, y: 540 },
+      ],
+    });
+  });
+
+  it("uses the final trajectory point as the response click", async () => {
+    const trajectory = Array.from({ length: 9 }, (_, index) => ({ x: 100 + index * 20, y: 200 + index * 10 }));
+    const turn = await agent(fakeTransport(interaction([
+      functionCall("submit_trial_actions", { trajectory }),
+    ]))).next(observation, new AbortController().signal);
+
+    expect(turn).toMatchObject({
+      status: "actions",
+      actionBatchType: "trial",
+      actions: [
+        ...trajectory.slice(0, -1).map(({ x, y }) => ({ type: "move", x: Math.floor(x / 1000 * viewport.width), y: Math.floor(y / 1000 * viewport.height) })),
+        { type: "move", x: Math.floor(trajectory.at(-1)!.x / 1000 * viewport.width), y: Math.floor(trajectory.at(-1)!.y / 1000 * viewport.height) },
+        { type: "click", x: Math.floor(trajectory.at(-1)!.x / 1000 * viewport.width), y: Math.floor(trajectory.at(-1)!.y / 1000 * viewport.height) },
       ],
     });
   });
@@ -334,10 +465,9 @@ describe("GeminiComputerUseAgent", () => {
       { x: 5, y: 5 }, { x: 6, y: 6 }, { x: 7, y: 7 }, { x: 8, y: 8 },
     ]))],
     ["a fractional trial coordinate", functionCall("submit_trial_actions", {
-      moves: [{ x: 0.5, y: 0 }, ...Array.from({ length: 8 }, (_, x) => ({ x, y: x }))],
-      click: { x: 500, y: 500 },
+      trajectory: [{ x: 0.5, y: 0 }, ...Array.from({ length: 8 }, (_, x) => ({ x, y: x }))],
     })],
-    ["a malformed final click", functionCall("submit_trial_actions", { moves: Array.from({ length: 9 }, () => ({ x: 1, y: 1 })), click: { x: 500 } })],
+    ["a malformed trajectory point", functionCall("submit_trial_actions", { trajectory: [...Array.from({ length: 8 }, () => ({ x: 1, y: 1 })), { x: 500 }] })],
   ])("rejects %s", async (_name, call) => {
     await expect(agent(fakeTransport(interaction([call]))).next(observation, new AbortController().signal)).resolves.toMatchObject({
       status: "recoverable",
@@ -474,6 +604,47 @@ describe("GeminiComputerUseAgent", () => {
       actions: [],
     });
   });
+
+  it.each(["regular", "allowed", "require_confirmation", "requires_confirmation"] as const)(
+    "acknowledges an authorized navigation action for Gemini safety decision %s",
+    async (decision) => {
+      const transport = fakeTransport(
+        interaction([
+          functionCall("click_visible", {
+            x: 700,
+            y: 500,
+            intent: "Click the visible Start button.",
+            safety_decision: {
+              decision,
+              explanation: "This is an authorized experiment navigation action.",
+            },
+          }),
+        ]),
+        interaction([{ type: "text", text: "Completed." }], "interaction-2"),
+      );
+      const computerUseAgent = agent(transport);
+      const signal = new AbortController().signal;
+      const firstTurn = await computerUseAgent.next(observation, signal);
+
+      expect(firstTurn).toMatchObject({ status: "actions", actionBatchType: "navigation" });
+      const results: readonly ActionResult[] = firstTurn.actions.map((action) => ({ action, status: "executed" }));
+      await expect(computerUseAgent.reportActionResults(observation, results, signal)).resolves.toMatchObject({
+        status: "finished",
+        actions: [],
+      });
+      const functionResult = (transport.requests[1] as {
+        input: Array<{ result: Array<{ type: string; text?: string }>; safety_acknowledgement?: boolean }>;
+      }).input[0];
+      expect(functionResult).not.toHaveProperty("safety_acknowledgement");
+      expect(functionResult.result[0]).toEqual({
+        type: "text",
+        text: JSON.stringify({
+          status: "executed",
+          safety_acknowledgement: true,
+        }),
+      });
+    },
+  );
 
   it("blocks a continuation with no pending call or a mismatched result count", async () => {
     const signal = new AbortController().signal;

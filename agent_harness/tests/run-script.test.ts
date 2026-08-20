@@ -1,16 +1,17 @@
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("agent harness shell runner", () => {
   it("documents the task, model, and run-mode choices", async () => {
-    const repositoryRoot = resolve("..");
     const result = await execFileAsync("bash", [resolve(repositoryRoot, "agent_harness/run.sh"), "--help"], {
       cwd: repositoryRoot,
       env: process.env,
@@ -25,7 +26,6 @@ describe("agent harness shell runner", () => {
   });
 
   it("rejects unsupported task values before starting npm", async () => {
-    const repositoryRoot = resolve("..");
     const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-harness-invalid-runner-"));
     const fakeNpm = join(temporaryRoot, "npm");
     await writeFile(fakeNpm, "#!/usr/bin/env node\nprocess.stdout.write('npm-called');\n", "utf8");
@@ -53,7 +53,6 @@ describe("agent harness shell runner", () => {
   });
 
   it("uses the repository CLI and forwards the run arguments", async () => {
-    const repositoryRoot = resolve("..");
     const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-harness-runner-"));
     const fakeNpm = join(temporaryRoot, "npm");
     await writeFile(fakeNpm, "#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify(process.argv.slice(2)));\n", "utf8");

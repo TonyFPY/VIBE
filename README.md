@@ -89,9 +89,9 @@ Complete the visible experiment using computer-use interaction only.
 Rules:
 - Use only what is visible in the browser. Do not inspect DOM, accessibility data, source code, files, network requests, task configuration, or hidden state.
 - Click Start and Continue normally.
-- For every trial, click the center cross first.
+- For every trial, click the fixation marker (+) first.
 - For every testing trial, after clicking the cross, move the cursor toward your chosen response image through multiple small visible movements, then click the image.
-- Do not jump directly from the center cross to a candidate with one direct click.
+- Do not jump directly from the fixation marker to a candidate with one direct click.
 - If “Save incomplete” appears, click `Download results`, then `Download trajectories`, and stop.
 - If “Results saved successfully” appears, do not click a download button: the API already saved both files. Stop.
 ```
@@ -108,9 +108,9 @@ Complete the visible experiment using computer-use interaction only.
 Rules:
 - Use only what is visible in the browser. Do not inspect DOM, accessibility data, source code, files, network requests, task configuration, or hidden state.
 - Click Start and Continue normally.
-- For every trial, click the center cross first.
+- For every trial, click the fixation marker (+) first.
 - For every testing trial, after clicking the cross, move the cursor toward your selected option through multiple small visible movements, then click the option.
-- Do not jump directly from the center cross to an option with one direct click.
+- Do not jump directly from the fixation marker to an option with one direct click.
 - If “Save incomplete” appears, click `Download results`, then `Download trajectories`, and stop.
 - If “Results saved successfully” appears, do not click a download button: the API already saved both files. Stop.
 ```

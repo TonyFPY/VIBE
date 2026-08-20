@@ -100,7 +100,11 @@ function objectMatchingTimelineFor(phase: "training" | "testing", trials: Object
 async function startVisualSimilarity(runMode: RunMode): Promise<void> {
   const response = await fetch("/data/dreamsim_100/data_100_web.csv");
   if (!response.ok) throw new Error("The trial dataset could not be loaded.");
-  const phases = selectRunPhases(splitExperimentPhases(parseDreamSimCsv(await response.text())), runMode);
+  const phases = selectRunPhases(
+    splitExperimentPhases(parseDreamSimCsv(await response.text())),
+    runMode,
+    `${identity.sessionId}:visual-similarity`,
+  );
   const jsPsych = initJsPsych({ display_element: root, on_finish: () => void finish(runMode) });
   jsPsych.run([
     { type: InstructionPlugin },
@@ -116,6 +120,7 @@ async function startObjectMatching(runMode: ObjectMatchingRunMode): Promise<void
   const phases = selectObjectMatchingRunPhases(
     splitObjectMatchingPhases(parseObjectMatchingCsv(await response.text())),
     runMode,
+    `${identity.sessionId}:object-matching`,
   );
   const jsPsych = initJsPsych({ display_element: root, on_finish: () => void finish(runMode) });
   jsPsych.run([

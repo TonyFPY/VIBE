@@ -35,6 +35,16 @@ function recoverableTurn(reason: string): AgentTurn {
   return { status: "recoverable", actions: [], rawProviderOutput: { error: reason }, failureReason: reason } as unknown as AgentTurn;
 }
 
+function providerRequestRecoveryTurn(reason: string): AgentTurn {
+  return {
+    status: "recoverable",
+    actions: [],
+    rawProviderOutput: { error: reason },
+    failureReason: reason,
+    recoveryKind: "provider-request",
+  } as unknown as AgentTurn;
+}
+
 function setupBatch(x = 100, y = 100): AgentTurn {
   return actionTurn([{ type: "click", x, y }]);
 }
@@ -54,6 +64,16 @@ function waitBatch(): AgentTurn {
   return { ...actionTurn([{ type: "wait", milliseconds: 5000 }]), actionBatchType: "wait" as never };
 }
 
+function fixationBatch(): AgentTurn {
+  return {
+    ...actionTurn([
+      { type: "move", x: 540, y: 337.5 },
+      { type: "click", x: 540, y: 337.5 },
+    ]),
+    actionBatchType: "fixation" as never,
+  };
+}
+
 function createFixture(
   turns: readonly AgentTurn[],
   options: {
@@ -63,6 +83,7 @@ function createFixture(
     screenshotError?: Error;
     hangProvider?: boolean;
     hangProviderCalls?: readonly number[];
+    automaticCenterFixation?: boolean;
     closeFailures?: ReadonlySet<string>;
     onReportActionResults?: (
       call: { observation: AgentObservation; results: readonly ActionResult[]; reportIndex: number },
@@ -129,6 +150,7 @@ function createFixture(
   const agent: ComputerUseAgent = {
     provider: "fake-provider",
     model: "fake-model",
+    ...(options.automaticCenterFixation ? { automaticCenterFixation: true } : {}),
     next: async (observation) => {
       providerCalls.push({ method: "next", observation });
       providerAttemptCount += 1;
@@ -177,7 +199,7 @@ function createFixture(
 }
 
 describe("trial-boundary computer-use run loop", () => {
-  it("captures instructions before fixation, executes Start, and reports its complete result list with the first trial screenshot", async () => {
+  it("captures the post-setup screenshot without premature fixation", async () => {
     const instructions = Uint8Array.from([1]);
     const trial = Uint8Array.from([2]);
     const run = createFixture([setupBatch(), finishedTurn()], { screenshots: [instructions, trial] });
@@ -190,31 +212,113 @@ describe("trial-boundary computer-use run loop", () => {
       method: "reportActionResults", observation: expect.objectContaining({ screenshot: trial }),
       results: [{ action: { type: "click", x: 100, y: 100 }, status: "executed" }],
     });
-    expect(run.trace).toEqual(["screenshot-1", "click-100-100", "move-540-337.5", "click-540-337.5", "screenshot-2"]);
+    expect(run.trace).toEqual(["screenshot-1", "click-100-100", "screenshot-2"]);
   });
 
   it("executes each 10-action trial batch before one continuation screenshot with no intermediate screenshots", async () => {
-    const run = createFixture([setupBatch(), trialBatch(), finishedTurn()]);
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch(), finishedTurn()]);
 
     await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "incomplete", stepCount: 3, observationCount: 3, actionCount: 11, invalidActionCount: 0,
+      status: "incomplete", stepCount: 4, observationCount: 4, actionCount: 11, invalidActionCount: 0,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "next"]);
-    expect(run.providerCalls[2]).toMatchObject({
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults", "next"]);
+    expect(run.providerCalls[3]).toMatchObject({
       observation: expect.objectContaining({ screenshot: Uint8Array.from([3]) }),
     });
     expect(run.resetCount()).toBe(1);
-    expect(run.screenshotCalls()).toBe(3);
+    expect(run.screenshotCalls()).toBe(4);
     expect(run.trace).toEqual([
-      "screenshot-1", "click-100-100", "move-540-337.5", "click-540-337.5", "screenshot-2",
+      "screenshot-1", "click-100-100", "screenshot-2", "move-540-337.5", "click-540-337.5", "screenshot-3",
       ...Array.from({ length: 9 }, (_, index) => `move-${10 + index}-${20 + index}`),
-      "click-756-386", "move-540-337.5", "click-540-337.5", "screenshot-3",
+      "click-756-386", "screenshot-4",
     ]);
-    expect(run.sleeps).toEqual([0, 0]);
+    expect(run.sleeps).toEqual([0, 0, 0]);
+  });
+
+  it("uses provider-mediated center fixation even when the agent advertises automatic fixation", async () => {
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch(), finishedTurn()], {
+      automaticCenterFixation: true,
+      screenshots: [Uint8Array.from([1]), Uint8Array.from([2]), Uint8Array.from([3]), Uint8Array.from([4])],
+    });
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete", stepCount: 4, observationCount: 4, actionCount: 11, invalidActionCount: 0,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults", "next"]);
+    expect(run.resetCount()).toBe(1);
+    expect(run.providerCalls[3]).toMatchObject({
+      method: "next",
+      observation: expect.objectContaining({ screenshot: Uint8Array.from([4]) }),
+    });
+    expect(run.browserActions).toEqual([
+      ["click", 100, 100],
+      ["move", 540, 337.5],
+      ["click", 540, 337.5],
+      ...Array.from({ length: 9 }, (_, index) => ["move", 10 + index, 20 + index] as const),
+      ["click", 756, 386],
+    ]);
+  });
+
+  it("keeps trial phase and retries when a trial batch leaves the visible screenshot unchanged", async () => {
+    let trialAttempts = 0;
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch(), trialBatch()], {
+      screenshots: [Uint8Array.from([1]), Uint8Array.from([2]), Uint8Array.from([3]), Uint8Array.from([3])],
+      onSession: (session) => {
+        const originalClick = session.click;
+        session.click = async (x, y) => {
+          await originalClick(x, y);
+          if (x === 756 && y === 386) {
+            trialAttempts += 1;
+            if (trialAttempts === 2) session.emitBackendEvent({ type: "results-response", status: 201, ok: true });
+          }
+        };
+      },
+    });
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "completed", stepCount: 4, observationCount: 4, actionCount: 21, invalidActionCount: 0,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual([
+      "next", "reportActionResults", "reportActionResults", "next",
+    ]);
+    expect(run.providerCalls[3].observation.screenshot).toEqual(Uint8Array.from([3]));
+    expect(run.providerCalls[3].observation.publicInstruction).toContain("previous trial response did not change the visible screen");
+    expect(run.providerCalls[3].observation.publicInstruction).toContain("Choose one of the surrounding candidate tiles; do not click the fixation marker or the middle reference tile");
+    expect(run.browserActions.filter(([type]) => type === "click")).toEqual([
+      ["click", 100, 100],
+      ["click", 540, 337.5],
+      ["click", 756, 386],
+      ["click", 756, 386],
+    ]);
+    expect(run.events).toContainEqual(expect.objectContaining({
+      type: "trial-no-progress-recovery",
+      attempt: 1,
+      maxAttempts: 3,
+    }));
+  });
+
+  it("stops after three unchanged trial screenshots without counting them as invalid batches", async () => {
+    const run = createFixture([
+      setupBatch(), fixationBatch(), trialBatch(), trialBatch(), trialBatch(), trialBatch(),
+    ], {
+      screenshots: [Uint8Array.from([1]), Uint8Array.from([2]), Uint8Array.from([3]), Uint8Array.from([3])],
+    });
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete",
+      failureReason: "trial no-progress recovery exhausted after 3 attempts",
+      actionCount: 41,
+      invalidActionCount: 0,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual([
+      "next", "reportActionResults", "reportActionResults", "next", "next", "next",
+    ]);
+    expect(run.resetCount()).toBe(3);
+    expect(run.events.filter((event) => event.type === "trial-no-progress-recovery")).toHaveLength(3);
   });
 
   it("starts a fresh provider interaction after a successful trial batch", async () => {
-    const run = createFixture([setupBatch(), trialBatch(), trialBatch(700, 300)], {
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch(), fixationBatch(), trialBatch(700, 300)], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -227,12 +331,14 @@ describe("trial-boundary computer-use run loop", () => {
     await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
       status: "completed", actionCount: 21, invalidActionCount: 0,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "next"]);
+    expect(run.providerCalls.map((call) => call.method)).toEqual([
+      "next", "reportActionResults", "reportActionResults", "next", "reportActionResults",
+    ]);
     expect(run.resetCount()).toBe(1);
   });
 
   it("stops after a successful final trial click before fixation or another provider request", async () => {
-    const run = createFixture([setupBatch(), trialBatch()], {
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch()], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -243,14 +349,14 @@ describe("trial-boundary computer-use run loop", () => {
     });
 
     await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "completed", stepCount: 2, observationCount: 2, actionCount: 11, failureReason: undefined,
+      status: "completed", stepCount: 3, observationCount: 3, actionCount: 11, failureReason: undefined,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults"]);
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults"]);
     expect(run.browserActions.at(-1)).toEqual(["click", 756, 386]);
   });
 
   it("accepts a single navigation click for Continue after trial batches", async () => {
-    const run = createFixture([setupBatch(), trialBatch(), navigationBatch(), trialBatch(700, 300)], {
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch(), navigationBatch(), fixationBatch(), trialBatch(700, 300)], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -267,7 +373,7 @@ describe("trial-boundary computer-use run loop", () => {
   });
 
   it("waits for a preparing screen and captures a fresh screenshot without an extra fixation click", async () => {
-    const run = createFixture([setupBatch(), waitBatch(), trialBatch()], {
+    const run = createFixture([setupBatch(), waitBatch(), fixationBatch(), trialBatch()], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -278,10 +384,12 @@ describe("trial-boundary computer-use run loop", () => {
     });
 
     await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "completed", actionCount: 12, observationCount: 3, invalidActionCount: 0,
+      status: "completed", actionCount: 12, observationCount: 4, invalidActionCount: 0,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults"]);
-    expect(run.sleeps).toEqual([0, 5000, 0, 0]);
+    expect(run.providerCalls.map((call) => call.method)).toEqual([
+      "next", "reportActionResults", "reportActionResults", "reportActionResults",
+    ]);
+    expect(run.sleeps).toEqual([0, 5000, 0, 0, 0]);
     expect(run.browserActions.filter(([type]) => type === "click")).toEqual([
       ["click", 100, 100],
       ["click", 540, 337.5],
@@ -289,8 +397,9 @@ describe("trial-boundary computer-use run loop", () => {
     ]);
   });
 
-  it("reports each action in a short trial batch as rejected without changing the screenshot and then retries", async () => {
-    const run = createFixture([setupBatch(), actionTurn([{ type: "click", x: 300, y: 300 }]), trialBatch()], {
+  it("waits for the visible cross before fixation and the trial batch", async () => {
+    const run = createFixture([navigationBatch(100, 100), waitBatch(), fixationBatch(), trialBatch()], {
+      screenshots: [Uint8Array.from([1]), Uint8Array.from([2]), Uint8Array.from([3]), Uint8Array.from([4])],
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -301,35 +410,94 @@ describe("trial-boundary computer-use run loop", () => {
     });
 
     await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "completed", actionCount: 11, invalidActionCount: 1, observationCount: 2,
+      status: "completed", actionCount: 12, observationCount: 4, invalidActionCount: 0,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults"]);
-    expect(run.providerCalls[2]).toMatchObject({
-      observation: run.providerCalls[1].observation,
-      results: [{ action: { type: "click", x: 300, y: 300 }, status: "rejected", error: "Trial batch must contain at least 10 actions" }],
+    expect(run.trace).toEqual([
+      "screenshot-1",
+      "click-100-100",
+      "screenshot-2",
+      "screenshot-3",
+      "move-540-337.5",
+      "click-540-337.5",
+      "screenshot-4",
+      ...Array.from({ length: 9 }, (_, index) => `move-${10 + index}-${20 + index}`),
+      "click-756-386",
+    ]);
+  });
+
+  it("resets context after rejecting a short trial batch and retries from a fresh screenshot", async () => {
+    const run = createFixture([setupBatch(), fixationBatch(), actionTurn([{ type: "click", x: 300, y: 300 }]), trialBatch()], {
+      screenshots: [Uint8Array.from([1]), Uint8Array.from([2]), Uint8Array.from([3]), Uint8Array.from([4])],
+      onSession: (session) => {
+        const originalClick = session.click;
+        session.click = async (x, y) => {
+          await originalClick(x, y);
+          if (x === 756 && y === 386) session.emitBackendEvent({ type: "results-response", status: 201, ok: true });
+        };
+      },
     });
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "completed", actionCount: 11, invalidActionCount: 1, observationCount: 4,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual([
+      "next", "reportActionResults", "reportActionResults", "next",
+    ]);
+    expect(run.providerCalls[3]).toMatchObject({
+      method: "next",
+      observation: expect.objectContaining({ screenshot: Uint8Array.from([4]) }),
+    });
+    expect(run.providerCalls[3].observation.screenshot).not.toBe(run.providerCalls[2].observation.screenshot);
+    expect(run.providerCalls[3].observation.publicInstruction).toContain("previous action batch was rejected");
     expect(run.browserActions).not.toContainEqual(["click", 300, 300]);
+    expect(run.resetCount()).toBe(1);
     expect(run.events).toContainEqual(expect.objectContaining({
       type: "action", actionValid: false, batchIndex: 1, batchSize: 1, error: "Trial batch must contain at least 10 actions",
     }));
   });
 
-  it("rejects an invalid setup batch without applying it and retries setup", async () => {
-    const run = createFixture([actionTurn([{ type: "click", x: 1080, y: 100 }]), setupBatch(), finishedTurn()]);
+  it("rejects a trial batch that clicks the visible reference frame and lets the provider retry", async () => {
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch(540, 337.5), trialBatch(756, 386)], {
+      onSession: (session) => {
+        const originalClick = session.click;
+        session.click = async (x, y) => {
+          await originalClick(x, y);
+          if (x === 756 && y === 386) session.emitBackendEvent({ type: "results-response", status: 201, ok: true });
+        };
+      },
+    });
 
     await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "incomplete", actionCount: 1, invalidActionCount: 1, observationCount: 2,
+      status: "completed", actionCount: 11, invalidActionCount: 1,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults"]);
+    expect(run.browserActions.filter((action) => action[0] === "click" && action[1] === 540 && action[2] === 337.5)).toHaveLength(1);
+    expect(run.browserActions).toContainEqual(["click", 756, 386]);
+    expect(run.providerCalls.at(-1)).toMatchObject({
+      method: "next",
+    });
+  });
+
+  it("rejects an invalid setup batch without applying it and retries setup", async () => {
+    const run = createFixture([actionTurn([{ type: "click", x: 1080, y: 100 }]), setupBatch(), finishedTurn()], {
+      screenshots: [Uint8Array.from([1]), Uint8Array.from([2]), Uint8Array.from([3])],
+    });
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete", actionCount: 1, invalidActionCount: 1, observationCount: 3,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "next", "reportActionResults"]);
     expect(run.providerCalls[1]).toMatchObject({
-      observation: run.providerCalls[0].observation,
-      results: [{ action: { type: "click", x: 1080, y: 100 }, status: "rejected", error: "Invalid batch action: click coordinates must be finite CSS pixels inside the viewport" }],
+      method: "next",
+      observation: expect.objectContaining({ screenshot: Uint8Array.from([2]) }),
     });
+    expect(run.providerCalls[1].observation.screenshot).not.toBe(run.providerCalls[0].observation.screenshot);
+    expect(run.providerCalls[1].observation.publicInstruction).toContain("previous action batch was rejected");
     expect(run.browserActions).not.toContainEqual(["click", 1080, 100]);
+    expect(run.resetCount()).toBe(1);
   });
 
   it("stops a browser-failed trial batch without executing later actions", async () => {
-    const run = createFixture([setupBatch(), trialBatch()], {
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch()], {
       onSession: (session) => {
         const originalMove = session.move;
         session.move = async (x, y) => {
@@ -340,9 +508,9 @@ describe("trial-boundary computer-use run loop", () => {
     });
 
     await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
-      status: "failed", failureReason: "browser input failed", actionCount: 1, observationCount: 2,
+      status: "failed", failureReason: "browser input failed", actionCount: 1, observationCount: 3,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults"]);
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "reportActionResults"]);
     expect(run.browserActions).toContainEqual(["move", 10, 20]);
     expect(run.browserActions).not.toContainEqual(["move", 11, 21]);
     expect(run.events).toContainEqual(expect.objectContaining({ type: "action", batchIndex: 1, batchSize: 10, actionValid: false, error: "browser input failed" }));
@@ -376,7 +544,7 @@ describe("trial-boundary computer-use run loop", () => {
         publicInstruction: expect.stringContaining("previous model output was rejected"),
       }),
     });
-    expect(run.browserActions).toEqual([["click", 100, 100], ["move", 540, 337.5], ["click", 540, 337.5]]);
+    expect(run.browserActions).toEqual([["click", 100, 100]]);
     expect(run.resetCount()).toBe(1);
     expect(run.events).toContainEqual(expect.objectContaining({
       type: "provider-output-recovery",
@@ -384,6 +552,62 @@ describe("trial-boundary computer-use run loop", () => {
       maxAttempts: 3,
       reason: "malformed action",
     }));
+  });
+
+  it("recovers an unsupported-action provider request from a fresh screenshot without replaying browser actions", async () => {
+    const run = createFixture([setupBatch(), providerRequestRecoveryTurn("400 Input blocked: unsupported action"), fixationBatch(), trialBatch()], {
+      onSession: (session) => {
+        const originalClick = session.click;
+        session.click = async (x, y) => {
+          await originalClick(x, y);
+          if (x === 756 && y === 386) session.emitBackendEvent({ type: "results-response", status: 201, ok: true });
+        };
+      },
+    });
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "completed", stepCount: 4, observationCount: 3, actionCount: 11, invalidActionCount: 0,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "next", "reportActionResults"]);
+    expect(run.providerCalls[2]).toMatchObject({
+      method: "next",
+      observation: expect.objectContaining({ screenshot: Uint8Array.from([2]) }),
+    });
+    expect(run.providerCalls[2].observation.publicInstruction).toBe(run.providerCalls[1].observation.publicInstruction);
+    expect(run.browserActions).toEqual([
+      ["click", 100, 100],
+      ["move", 540, 337.5],
+      ["click", 540, 337.5],
+      ...Array.from({ length: 9 }, (_, index) => ["move", 10 + index, 20 + index] as const),
+      ["click", 756, 386],
+    ]);
+    expect(run.resetCount()).toBe(1);
+    expect(run.events).toContainEqual(expect.objectContaining({
+      type: "provider-request-recovery",
+      attempt: 1,
+      maxAttempts: 3,
+      reason: "400 Input blocked: unsupported action",
+    }));
+  });
+
+  it("stops after three provider-request recoveries without repeating the executed action", async () => {
+    const run = createFixture([
+      setupBatch(),
+      providerRequestRecoveryTurn("provider-1"),
+      providerRequestRecoveryTurn("provider-2"),
+      providerRequestRecoveryTurn("provider-3"),
+      providerRequestRecoveryTurn("provider-4"),
+    ]);
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete",
+      failureReason: "provider request recovery exhausted after 3 attempts: provider-4",
+      actionCount: 1,
+    });
+    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "next", "next", "next"]);
+    expect(run.resetCount()).toBe(3);
+    expect(run.browserActions).toEqual([["click", 100, 100]]);
+    expect(run.events.filter((event) => event.type === "provider-request-recovery")).toHaveLength(3);
   });
 
   it("stops as incomplete after three unsuccessful output recoveries without executing an invalid action", async () => {
@@ -410,11 +634,9 @@ describe("trial-boundary computer-use run loop", () => {
     await expect(invalidLimitRun.loop.run({ ...baseConfig, maxInvalidActions: 1 }, "Visible instruction")).resolves.toMatchObject({
       status: "incomplete", failureReason: "invalid action limit reached", invalidActionCount: 1, actionCount: 0,
     });
-    expect(invalidLimitRun.providerCalls[1]).toMatchObject({
-      results: [{ action: { type: "wait", milliseconds: 0 }, status: "rejected", error: "Batch must contain at least one action" }],
-    });
+    expect(invalidLimitRun.providerCalls.map((call) => call.method)).toEqual(["next"]);
 
-    const requestFailureRun = createFixture([setupBatch(), trialBatch()], {
+    const requestFailureRun = createFixture([setupBatch(), fixationBatch(), trialBatch()], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -428,6 +650,56 @@ describe("trial-boundary computer-use run loop", () => {
     });
   });
 
+  it("resets the invalid-action safety streak after a valid batch", async () => {
+    const run = createFixture([
+      actionTurn([]),
+      navigationBatch(101, 101),
+      actionTurn([]),
+      navigationBatch(202, 202),
+      finishedTurn(),
+    ]);
+
+    await expect(run.loop.run({ ...baseConfig, maxInvalidActions: 2 }, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete",
+      failureReason: "provider finished before result response",
+      invalidActionCount: 2,
+      actionCount: 2,
+    });
+    expect(run.browserActions).toEqual([
+      ["click", 101, 101],
+      ["click", 202, 202],
+    ]);
+  });
+
+  it("strengthens repeated trial-reference recovery instructions before stopping", async () => {
+    const run = createFixture([
+      setupBatch(),
+      fixationBatch(),
+      trialBatch(540, 337),
+      trialBatch(540, 337),
+      trialBatch(756, 386),
+    ]);
+
+    await expect(run.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({
+      status: "incomplete",
+      actionCount: 11,
+      invalidActionCount: 2,
+    });
+    expect(run.providerCalls[3]).toMatchObject({
+      method: "next",
+      observation: expect.objectContaining({
+        publicInstruction: expect.stringContaining("trial recovery attempt 1"),
+      }),
+    });
+    expect(run.providerCalls[3].observation.publicInstruction).toContain(
+      "Do not repeat the rejected middle reference-tile click",
+    );
+    expect(run.providerCalls[3].observation.publicInstruction).toContain(
+      "final click must land on one of the surrounding candidate tiles, not the middle reference tile",
+    );
+    expect(run.providerCalls[4].observation.publicInstruction).toContain("trial recovery attempt 2");
+  });
+
   it("fails on screenshot and provider request errors", async () => {
     const browserRun = createFixture([], { screenshotError: new Error("screenshot unavailable") });
     await expect(browserRun.loop.run(baseConfig, "Visible instruction")).resolves.toMatchObject({ status: "failed", failureReason: "screenshot unavailable" });
@@ -437,7 +709,7 @@ describe("trial-boundary computer-use run loop", () => {
   });
 
   it("recovers once from a provider timeout by resetting context and starting a fresh request", async () => {
-    const run = createFixture([setupBatch(), trialBatch(700, 300)], {
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch(700, 300)], {
       hangProviderCalls: [2],
       onSession: (session) => {
         const originalClick = session.click;
@@ -451,7 +723,9 @@ describe("trial-boundary computer-use run loop", () => {
     await expect(run.loop.run({ ...baseConfig, performance: { ...baseConfig.performance, requestTimeoutMs: 1 } }, "Visible instruction")).resolves.toMatchObject({
       status: "completed", actionCount: 11, invalidActionCount: 0,
     });
-    expect(run.providerCalls.map((call) => call.method)).toEqual(["next", "reportActionResults", "next"]);
+    expect(run.providerCalls.map((call) => call.method)).toEqual([
+      "next", "reportActionResults", "next", "reportActionResults",
+    ]);
     expect(run.resetCount()).toBe(1);
     expect(run.events).toContainEqual(expect.objectContaining({ type: "provider-timeout-recovery", method: "reportActionResults" }));
   });
@@ -467,7 +741,11 @@ describe("trial-boundary computer-use run loop", () => {
   });
 
   it("fails after three unsuccessful trial result responses", async () => {
-    const run = createFixture([setupBatch(), trialBatch(700, 300), trialBatch(701, 301), trialBatch(702, 302)], {
+    const run = createFixture([
+      setupBatch(), fixationBatch(), trialBatch(700, 300),
+      fixationBatch(), trialBatch(701, 301),
+      fixationBatch(), trialBatch(702, 302),
+    ], {
       onSession: (session) => {
         const originalClick = session.click;
         session.click = async (x, y) => {
@@ -480,7 +758,7 @@ describe("trial-boundary computer-use run loop", () => {
   });
 
   it("keeps backend completion completed when cleanup fails and closes each resource once", async () => {
-    const run = createFixture([setupBatch(), trialBatch()], {
+    const run = createFixture([setupBatch(), fixationBatch(), trialBatch()], {
       closeFailures: new Set(["backend", "agent", "session", "host", "logger"]),
       onSession: (session) => {
         const originalClick = session.click;

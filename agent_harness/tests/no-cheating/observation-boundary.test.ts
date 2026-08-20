@@ -178,8 +178,11 @@ class FakeGeminiTransport implements GeminiTransport {
         functionCall("click_visible", { x: 250, y: 250, intent: "start visible task" }, "setup-click"),
       ], "interaction-1"),
       interaction([
+        functionCall("click_fixation_marker", {}, "fixation-click"),
+      ], "interaction-2"),
+      interaction([
         functionCall("submit_trial_actions", {
-          moves: [
+          trajectory: [
             { x: 400, y: 300 },
             { x: 401, y: 301 },
             { x: 402, y: 302 },
@@ -188,11 +191,10 @@ class FakeGeminiTransport implements GeminiTransport {
             { x: 405, y: 305 },
             { x: 406, y: 306 },
             { x: 407, y: 307 },
-            { x: 408, y: 308 },
+            { x: 700, y: 500 },
           ],
-          click: { x: 700, y: 500 },
         }, "trial-batch"),
-      ], "interaction-2"),
+      ], "interaction-3"),
     ];
   }
 
@@ -423,9 +425,9 @@ describe("screenshot-only observation boundary", () => {
 
     expect(JSON.stringify(evaluator.evaluatorValues)).toContain(canary);
     expect(evaluator.evaluatorValues.length).toBeGreaterThanOrEqual(2);
-    expect(summary).toMatchObject({ status: "completed", actionCount: 11, observationCount: 2 });
-    expect(agent.observations).toHaveLength(2);
-    expect(providerRequests).toHaveLength(2);
+    expect(summary).toMatchObject({ status: "completed", actionCount: 11, observationCount: 3 });
+    expect(agent.observations).toHaveLength(3);
+    expect(providerRequests).toHaveLength(3);
     expect(providerRequests[0]).toMatchObject({
       input: [
         { type: "text", text: expect.stringContaining(publicInstruction) },
@@ -435,6 +437,7 @@ describe("screenshot-only observation boundary", () => {
     expect(providerRequests[0].input).toHaveLength(2);
     const serializedInitialTools = JSON.stringify(providerRequests[0].tools);
     expect(serializedInitialTools).toContain('"name":"click_visible"');
+    expect(serializedInitialTools).toContain('"name":"click_fixation_marker"');
     expect(serializedInitialTools).toContain('"name":"submit_trial_actions"');
     expect(serializedInitialTools).not.toContain('"name":"click"');
     expect(serializedInitialTools).not.toContain('"name":"move"');
@@ -453,6 +456,7 @@ describe("screenshot-only observation boundary", () => {
     expect(providerRequests[1].input).toHaveLength(1);
     const serializedContinuationTools = JSON.stringify(providerRequests[1].tools);
     expect(serializedContinuationTools).toContain('"name":"click_visible"');
+    expect(serializedContinuationTools).toContain('"name":"click_fixation_marker"');
     expect(serializedContinuationTools).toContain('"name":"submit_trial_actions"');
     expect(serializedContinuationTools).not.toContain('"name":"click"');
     expect(serializedContinuationTools).not.toContain('"name":"move"');
@@ -465,6 +469,23 @@ describe("screenshot-only observation boundary", () => {
     expect(continuationResults.at(-1)?.result.at(-1)).toMatchObject({
       type: "image", data: "/9j/FBQ=", mime_type: "image/jpeg",
     });
+    expect(providerRequests[2]).toMatchObject({
+      previous_interaction_id: "interaction-2",
+      input: [{
+        type: "function_result",
+        call_id: "fixation-click",
+        name: "click_fixation_marker",
+        result: [
+          { type: "text", text: JSON.stringify([
+            { status: "executed", error: undefined },
+            { status: "executed", error: undefined },
+          ]) },
+          { type: "image", data: "/9j/FBQ=", mime_type: "image/jpeg" },
+        ],
+      }],
+    });
+    const serializedFixationTools = JSON.stringify(providerRequests[2].tools);
+    expect(serializedFixationTools).toContain('"name":"click_fixation_marker"');
     expect(openedUrl).toBe("https://example.test/tasks/visual-similarity?participant_id=A001&model=google%2Fgemini-3.7-flash&run=dev");
 
     assertBoundaryValue("observations", agent.observations);
@@ -473,10 +494,15 @@ describe("screenshot-only observation boundary", () => {
     assertNoStructuralBoundaryLeak("initial request", transport.requests[0]);
     assertBoundaryValue("continuation request", transport.requests[1]);
     assertNoStructuralBoundaryLeak("continuation request", transport.requests[1]);
+    assertBoundaryValue("fixation request", transport.requests[2]);
+    assertNoStructuralBoundaryLeak("fixation request", transport.requests[2]);
     assertBoundaryValue("provider requests", transport.requests);
     assertNoStructuralBoundaryLeak("provider requests", transport.requests);
     expect(agent.actionResultBatches).toEqual([[
       { action: { type: "click", x: 270, y: 168 }, status: "executed" },
+    ], [
+      { action: { type: "move", x: 540, y: 337.5 }, status: "executed" },
+      { action: { type: "click", x: 540, y: 337.5 }, status: "executed" },
     ]]);
     assertBoundaryValue("action result batches", agent.actionResultBatches);
     assertNoStructuralBoundaryLeak("action result batches", agent.actionResultBatches);
@@ -495,7 +521,8 @@ describe("screenshot-only observation boundary", () => {
     });
     expect(persistedLog).toContain("screenshot-0001");
     expect(persistedLog).toContain("screenshot-0002");
-    expect(persistedLog).not.toContain("screenshot-0003");
+    expect(persistedLog).toContain("screenshot-0003");
+    expect(persistedLog).not.toContain("screenshot-0004");
     expect(persistedLog).toContain("rawProviderOutput");
   });
 });

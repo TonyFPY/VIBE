@@ -31,8 +31,8 @@ export class InstructionPlugin {
       <section class="vs-card vs-instructions">
         <p class="vs-eyebrow">Visual similarity</p>
         <h2>Which image is most similar to the reference?</h2>
-        <p>Each trial begins at the center cross. Click it to start each trial.</p>
-        <p>Compare and choose left or right by clicking the image.</p>
+        <p>Each trial begins at the fixation marker (+). Click it to start each trial.</p>
+        <p>Compare and choose one surrounding candidate tile by clicking its image.</p>
         <p>You will start with some training trials.</p>
         <p>Please do not refresh or close this window.</p>
         <button class="vs-primary" type="button">Start</button>

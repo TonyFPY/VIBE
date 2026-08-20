@@ -6,6 +6,7 @@ import {
   shouldSamplePointer,
   TRIAL_CANVAS,
 } from "../shared/experiment/geometry";
+import { shuffleTestingPhase } from "../shared/experiment/randomization";
 
 export { isTrialViewportSupported, pointerTupleAtCross, shouldSamplePointer, TRIAL_CANVAS } from "../shared/experiment/geometry";
 
@@ -65,10 +66,11 @@ export function parseDreamSimCsv(csv: string): DreamSimTrial[] {
 }
 
 export const splitExperimentPhases = (trials: DreamSimTrial[]): TrialPhases => ({ training: trials.slice(0, 3), testing: trials.slice(3) });
-export function selectRunPhases(phases: TrialPhases, mode: RunMode): TrialPhases {
-  return mode === "development"
+export function selectRunPhases(phases: TrialPhases, mode: RunMode, shuffleSeed?: string): TrialPhases {
+  const selected = mode === "development"
     ? { training: phases.training.slice(0, 3), testing: phases.testing.slice(0, 10) }
     : phases;
+  return shuffleSeed ? shuffleTestingPhase(selected, shuffleSeed) : selected;
 }
 export const scoreResponse = (selectedSide: Side, correctSide: Side) => selectedSide === correctSide;
 export const trainingAlignmentFeedback = (correct: boolean) => (

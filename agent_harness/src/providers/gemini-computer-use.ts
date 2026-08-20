@@ -1,4 +1,4 @@
-import type { ActionResult, AgentActionBatchType, AgentObservation, AgentTurn, ComputerAction } from "../actions/contract";
+import type { ActionResult, AgentActionBatchType, AgentObservation, AgentRecoveryKind, AgentTurn, ComputerAction } from "../actions/contract";
 import { MAX_BATCH_ACTIONS, MAX_TRIAL_MOVES, MIN_TRIAL_MOVES } from "../actions/policy";
 import type { PerformanceConfig, Viewport } from "../config/types";
 import type { ComputerUseAgent } from "./computer-use-agent";
@@ -49,12 +49,23 @@ const CUSTOM_POINTER_TOOLS = [
   },
   {
     type: "function",
+    name: "click_fixation_marker",
+    description: "Move to and click the visible fixation marker as the fixation step. Use only when the fixation-marker screen is visibly present; the next screenshot will show the response grid.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
     name: "submit_trial_actions",
-    description: `Submit ${MIN_TRIAL_MOVES} through ${MAX_TRIAL_MOVES} visible pointer moves followed by one final visible click.`,
+    description: `Submit a visible pointer trajectory with ${MIN_TRIAL_MOVES} through ${MAX_TRIAL_MOVES} points. The final trajectory point is the one response click.`,
     parameters: {
       type: "object",
       properties: {
-        moves: {
+        trajectory: {
           type: "array",
           minItems: MIN_TRIAL_MOVES,
           maxItems: MAX_TRIAL_MOVES,
@@ -65,14 +76,8 @@ const CUSTOM_POINTER_TOOLS = [
             additionalProperties: false,
           },
         },
-        click: {
-          type: "object",
-          properties: { x: NORMALIZED_X_SCHEMA, y: NORMALIZED_Y_SCHEMA },
-          required: ["x", "y"],
-          additionalProperties: false,
-        },
       },
-      required: ["moves", "click"],
+      required: ["trajectory"],
       additionalProperties: false,
     },
   },
@@ -86,7 +91,13 @@ const PUBLIC_INTERACTION_POLICY = [
   "Public harness interaction policy:",
   "Use click_visible for one visible setup or navigation click, including Start or Continue.",
   "Use the native wait_5_seconds action only when the visible screen says it is preparing or loading; it is not a trial response.",
-  `On trial-response screens, use submit_trial_actions with at least ${MIN_TRIAL_MOVES} separate moves followed by one final click.`,
+  "Do not submit trial actions while a preparing or loading message is visible; wait until the fixation marker is visibly present.",
+  "After a successful trial response, the browser harness captures the next cross-only screenshot before requesting the next action.",
+  "If a fixation-marker screen is presented to you after a loading wait, call click_fixation_marker exactly once; the next screenshot will show the response grid.",
+  "Do not use click_visible for the fixation marker or submit trial actions from the fixation-marker screen.",
+  "After the fixation screenshot shows the stimuli, use submit_trial_actions.",
+  "The response grid's middle tile labeled reference is not a response target; the final click must land on one of the surrounding candidate tiles, not the middle tile.",
+  `On trial-response screens, use submit_trial_actions with ${MIN_TRIAL_MOVES} through ${MAX_TRIAL_MOVES} visible trajectory points; the final point is your response click.`,
   "For every custom pointer coordinate, provide an integer normalized x/y value from 0 through 999; these are not CSS pixels.",
   "Use no native pointer controls or other excluded controls.",
   "The harness remains authoritative if you violate this policy.",
@@ -102,6 +113,7 @@ interface PendingFunctionCall {
   id: string;
   name: string;
   actionCount: number;
+  safetyAcknowledgement: boolean;
 }
 
 interface NativeInteraction {
@@ -136,6 +148,26 @@ function hasFiniteInteger(record: Record<string, unknown>, key: string): record 
 
 function hasOnlyKeys(record: Record<string, unknown>, allowedKeys: readonly string[]): boolean {
   return Object.keys(record).every((key) => allowedKeys.includes(key));
+}
+
+type SafetyDisposition = "allowed" | "acknowledge" | "blocked";
+
+function safetyDisposition(arguments_: Record<string, unknown>): SafetyDisposition | undefined {
+  const safetyDecision = arguments_.safety_decision;
+  if (safetyDecision === undefined) return "allowed";
+  if (!isRecord(safetyDecision) || !hasOnlyKeys(safetyDecision, ["decision", "explanation"])) return undefined;
+  if (typeof safetyDecision.decision !== "string") return undefined;
+  if (safetyDecision.explanation !== undefined && typeof safetyDecision.explanation !== "string") return undefined;
+  const decision = safetyDecision.decision.toLowerCase();
+  if (decision === "regular" || decision === "allowed") return "allowed";
+  if (decision === "require_confirmation" || decision === "requires_confirmation") return "acknowledge";
+  if (decision === "blocked") return "blocked";
+  return undefined;
+}
+
+function actionArguments(arguments_: Record<string, unknown>): Record<string, unknown> {
+  const { safety_decision: _safetyDecision, ...rest } = arguments_;
+  return rest;
 }
 
 function toBase64(screenshot: Uint8Array): string {
@@ -188,8 +220,12 @@ function blocked(rawProviderOutput: unknown, failureReason: string): AgentTurn {
   return { status: "blocked", actions: [], rawProviderOutput, failureReason };
 }
 
-function recoverable(rawProviderOutput: unknown, failureReason: string): AgentTurn {
-  return { status: "recoverable", actions: [], rawProviderOutput, failureReason };
+function recoverable(
+  rawProviderOutput: unknown,
+  failureReason: string,
+  recoveryKind: AgentRecoveryKind = "model-output",
+): AgentTurn {
+  return { status: "recoverable", actions: [], rawProviderOutput, failureReason, recoveryKind };
 }
 
 export function normalizeGeminiCoordinate(value: number, axis: "x" | "y", viewport: Viewport): number {
@@ -223,32 +259,80 @@ function parseComputerAction(call: NativeFunctionCall): {
   actions: ComputerAction[];
   actionBatchType: AgentActionBatchType;
   intent?: string;
+  safetyAcknowledgement: boolean;
 } | undefined {
+  const disposition = safetyDisposition(call.arguments);
+  if (disposition === undefined || disposition === "blocked") return undefined;
+  const safetyAcknowledgement = call.arguments.safety_decision !== undefined;
+  const arguments_ = actionArguments(call.arguments);
   if (call.name === "wait_5_seconds") {
-    return hasOnlyKeys(call.arguments, [])
-      ? { actions: [{ type: "wait", milliseconds: 5000 }], actionBatchType: "wait" }
+    return hasOnlyKeys(arguments_, [])
+      ? { actions: [{ type: "wait", milliseconds: 5000 }], actionBatchType: "wait", safetyAcknowledgement }
       : undefined;
   }
   if (call.name === "click_visible") {
-    const action = normalizedPointerAction("click", call.arguments, true);
+    const action = normalizedPointerAction("click", arguments_, true);
     return action
-      ? { actions: [action], actionBatchType: "navigation", intent: call.arguments.intent as string }
+      ? { actions: [action], actionBatchType: "navigation", intent: arguments_.intent as string, safetyAcknowledgement }
       : undefined;
   }
-  if (call.name !== "submit_trial_actions" || !hasOnlyKeys(call.arguments, ["moves", "click"])) return undefined;
-  if (!Array.isArray(call.arguments.moves) || !isRecord(call.arguments.click)) return undefined;
-  if (call.arguments.moves.length < MIN_TRIAL_MOVES || call.arguments.moves.length > MAX_TRIAL_MOVES) return undefined;
-  const moves = call.arguments.moves.map((move) => (
-    isRecord(move) ? normalizedPointerAction("move", move) : undefined
+  if (call.name === "click_fixation_marker") {
+    return hasOnlyKeys(arguments_, [])
+      ? {
+          actions: [
+            { type: "move", x: VIEWPORT.width / 2, y: VIEWPORT.height / 2 },
+            { type: "click", x: VIEWPORT.width / 2, y: VIEWPORT.height / 2 },
+          ],
+          actionBatchType: "fixation",
+          safetyAcknowledgement,
+        }
+      : undefined;
+  }
+  if (call.name !== "submit_trial_actions" || !hasOnlyKeys(arguments_, ["trajectory"])) return undefined;
+  if (!Array.isArray(arguments_.trajectory)) return undefined;
+  if (arguments_.trajectory.length < MIN_TRIAL_MOVES || arguments_.trajectory.length > MAX_TRIAL_MOVES) return undefined;
+  const trajectory = arguments_.trajectory.map((point) => (
+    isRecord(point) ? normalizedPointerAction("move", point) : undefined
   ));
-  const click = normalizedPointerAction("click", call.arguments.click);
-  if (moves.some((move) => !move) || !click) return undefined;
-  return { actions: [...moves as ComputerAction[], click], actionBatchType: "trial" };
+  if (trajectory.some((point) => !point)) return undefined;
+  const moves = trajectory as ComputerAction[];
+  const finalMove = moves[moves.length - 1];
+  if (finalMove.type !== "move") return undefined;
+  return {
+    actions: [...moves, { type: "click", x: finalMove.x, y: finalMove.y }],
+    actionBatchType: "trial",
+    safetyAcknowledgement,
+  };
 }
 
 function isTransientHttpFailure(error: unknown): boolean {
-  if (error instanceof GeminiHttpError) return TRANSIENT_HTTP_STATUSES.has(error.status);
-  return isRecord(error) && typeof error.status === "number" && TRANSIENT_HTTP_STATUSES.has(error.status);
+  const status = httpStatus(error);
+  return status !== undefined && TRANSIENT_HTTP_STATUSES.has(status);
+}
+
+function httpStatus(error: unknown): number | undefined {
+  if (error instanceof GeminiHttpError) return error.status;
+  if (!isRecord(error)) return undefined;
+  if (typeof error.status === "number") return error.status;
+  if (typeof error.statusCode === "number") return error.statusCode;
+  const response = error.response;
+  return isRecord(response) && typeof response.status === "number" ? response.status : undefined;
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (isRecord(error) && typeof error.message === "string") return error.message;
+  return String(error);
+}
+
+function isProviderActionPolicyFailure(error: unknown): boolean {
+  const message = errorText(error);
+  const knownActionPolicyMessage = /unsupported action/i.test(message)
+    || /test harness specific action/i.test(message)
+    || (/cross-only screenshot/i.test(message) && /submit_trial_actions/i.test(message));
+  return httpStatus(error) === 400
+    && /input blocked/i.test(message)
+    && knownActionPolicyMessage;
 }
 
 export class GeminiComputerUseAgent implements ComputerUseAgent {
@@ -307,12 +391,30 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
       input: pendingCalls.map((pendingCall, index) => {
         const callResults = results.slice(actionIndex, actionIndex + pendingCall.actionCount);
         actionIndex += pendingCall.actionCount;
+        const serializedActionResults = callResults.map(({ status, error }) => ({ status, error }));
+        // Gemini reads this acknowledgement from the JSON action result in the text part,
+        // not from the outer function_result envelope.
+        const resultStatus = callResults.every(({ status }) => status === "executed")
+          ? "executed"
+          : callResults.some(({ status }) => status === "failed")
+            ? "failed"
+            : "rejected";
+        const firstError = callResults.find(({ error }) => error !== undefined)?.error;
+        const resultPayload = pendingCall.safetyAcknowledgement
+          ? {
+              status: resultStatus,
+              ...(firstError === undefined ? {} : { error: firstError }),
+              safety_acknowledgement: true,
+              ...(serializedActionResults.length > 1 ? { action_results: serializedActionResults } : {}),
+            }
+          : serializedActionResults;
+        const resultText = JSON.stringify(resultPayload);
         return {
           type: "function_result",
           call_id: pendingCall.id,
           name: pendingCall.name,
           result: [
-            { type: "text", text: JSON.stringify(callResults.map(({ status, error }) => ({ status, error }))) },
+            { type: "text", text: resultText },
             ...(index === pendingCalls.length - 1
               ? [{ type: "image", data: toBase64(observation.screenshot), mime_type: observation.mimeType }]
               : []),
@@ -352,6 +454,14 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
         response = await this.transport.invoke(request, signal);
         break;
       } catch (error) {
+        if (isProviderActionPolicyFailure(error)) {
+          const message = errorText(error);
+          return recoverable(
+            { error: message, status: httpStatus(error) },
+            `Gemini provider request rejected with an unsupported action: ${message}`,
+            "provider-request",
+          );
+        }
         if (!isTransientHttpFailure(error) || attempt >= this.options.performance.maxProviderRetries) throw error;
         const backoffMs = 100 * 2 ** attempt + Math.floor(this.random() * 50);
         await this.sleep(backoffMs);
@@ -399,24 +509,43 @@ export class GeminiComputerUseAgent implements ComputerUseAgent {
       if (!call) return recoverable(rawProviderOutput, "Gemini returned a malformed function call");
       calls.push(call);
     }
+    const safetyDispositions = calls.map(({ arguments: arguments_ }) => safetyDisposition(arguments_));
+    if (safetyDispositions.some((disposition) => disposition === "blocked")) {
+      return blocked(rawProviderOutput, "Gemini safety decision blocked the action");
+    }
+    if (safetyDispositions.some((disposition) => disposition === undefined)) {
+      return recoverable(rawProviderOutput, "Gemini returned a malformed safety decision");
+    }
     const parsed = calls.map(parseComputerAction);
     if (parsed.some((action) => !action)) {
       return recoverable(rawProviderOutput, "Gemini returned an unsupported or malformed function call");
     }
-    const parsedCalls = parsed as { actions: ComputerAction[]; actionBatchType: AgentActionBatchType; intent?: string }[];
+    const parsedCalls = parsed as {
+      actions: ComputerAction[];
+      actionBatchType: AgentActionBatchType;
+      intent?: string;
+      safetyAcknowledgement: boolean;
+    }[];
     const actions = parsedCalls.flatMap(({ actions: callActions }) => callActions);
     if (actions.length > MAX_BATCH_ACTIONS) {
       return recoverable(rawProviderOutput, `Gemini returned more than ${MAX_BATCH_ACTIONS} actions`);
     }
     this.previousInteractionId = interaction.id;
-    this.pendingCalls = calls.map(({ id, name }, index) => ({ id, name, actionCount: parsedCalls[index].actions.length }));
+    this.pendingCalls = calls.map(({ id, name }, index) => ({
+      id,
+      name,
+      actionCount: parsedCalls[index].actions.length,
+      safetyAcknowledgement: parsedCalls[index].safetyAcknowledgement,
+    }));
     const actionBatchType = parsedCalls.every(({ actionBatchType }) => actionBatchType === "navigation")
       ? "navigation"
-      : parsedCalls.every(({ actionBatchType }) => actionBatchType === "trial")
-        ? "trial"
-        : parsedCalls.every(({ actionBatchType }) => actionBatchType === "wait")
-          ? "wait"
-          : undefined;
+      : parsedCalls.every(({ actionBatchType }) => actionBatchType === "fixation")
+        ? "fixation"
+        : parsedCalls.every(({ actionBatchType }) => actionBatchType === "trial")
+          ? "trial"
+          : parsedCalls.every(({ actionBatchType }) => actionBatchType === "wait")
+            ? "wait"
+            : undefined;
     return {
       status: "actions",
       actions,

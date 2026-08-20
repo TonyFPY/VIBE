@@ -1,5 +1,6 @@
 import { isTrialViewportSupported } from "../shared/experiment/geometry";
 import { preloadImage } from "../shared/experiment/image-preload";
+import { shuffleTestingPhase } from "../shared/experiment/randomization";
 
 export interface ObjectMatchingTrial {
   id: string;
@@ -91,10 +92,12 @@ export const splitObjectMatchingPhases = (trials: ObjectMatchingTrial[]): Object
 export function selectObjectMatchingRunPhases(
   phases: ObjectMatchingTrialPhases,
   mode: ObjectMatchingRunMode,
+  shuffleSeed?: string,
 ): ObjectMatchingTrialPhases {
-  return mode === "development"
+  const selected = mode === "development"
     ? { training: phases.training.slice(0, 3), testing: phases.testing.slice(0, 10) }
     : phases;
+  return shuffleSeed ? shuffleTestingPhase(selected, shuffleSeed) : selected;
 }
 
 export const scoreObjectMatchingResponse = (selectedLabel: number, correctLabel: number) => selectedLabel === correctLabel;

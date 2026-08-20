@@ -6,7 +6,7 @@ const DEFAULT_PERFORMANCE: PerformanceConfig = {
   outputTokens: 2048,
   connectTimeoutMs: 10_000,
   requestTimeoutMs: 120_000,
-  totalRunTimeoutMs: 1_800_000,
+  totalRunTimeoutMs: 2_700_000,
   settleDelayMs: 2_000,
   maxResponseBytes: 131_072,
   maxProviderRetries: 2,
@@ -78,7 +78,7 @@ export function parseHarnessConfig(input: unknown): HarnessConfig {
     screenshotQuality: boundedInteger(input.screenshotQuality, 90, "screenshotQuality", 80, 100),
     mouseMoveSteps: boundedInteger(input.mouseMoveSteps, 1, "mouseMoveSteps", 1, 100),
     mouseMoveDelayMs: boundedInteger(input.mouseMoveDelayMs, DEFAULT_MOUSE_MOVE_DELAY_MS, "mouseMoveDelayMs", 0, 1000),
-    maxSteps: boundedInteger(input.maxSteps, 256, "maxSteps", 1, 10_000),
+    maxSteps: boundedInteger(input.maxSteps, 384, "maxSteps", 1, 10_000),
     maxInvalidActions: boundedInteger(input.maxInvalidActions, 3, "maxInvalidActions", 0, 100),
     performance: {
       outputTokens: boundedInteger(performanceRecord.outputTokens, DEFAULT_PERFORMANCE.outputTokens, "outputTokens", 16, 4096),

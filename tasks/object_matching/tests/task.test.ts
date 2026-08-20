@@ -13,6 +13,8 @@ import {
   toPublicObjectMatchingTrial,
   objectMatchingFeedback,
   ObjectMatchingPreloadBuffer,
+  type ObjectMatchingRunMode,
+  type ObjectMatchingTrialPhases,
 } from "../task";
 import { ObjectMatchingPlugin } from "../renderer";
 import { isRecordedPhase } from "../../shared/experiment/types";
@@ -87,6 +89,43 @@ describe("object matching task", () => {
     expect(phases.testing).toHaveLength(12);
     expect(selectObjectMatchingRunPhases(phases, "development").testing).toHaveLength(10);
     expect(selectObjectMatchingRunPhases(phases, "full")).toEqual(phases);
+  });
+
+  it("shuffles only the testing phase when a session seed is supplied", () => {
+    const trials = parseObjectMatchingCsv(`${header}\n${Array.from({ length: 15 }, (_, index) => row(index)).join("\n")}`);
+    const phases = splitObjectMatchingPhases(trials);
+    const selectWithSeed = selectObjectMatchingRunPhases as unknown as (
+      phases: ObjectMatchingTrialPhases,
+      mode: ObjectMatchingRunMode,
+      seed: string,
+    ) => ObjectMatchingTrialPhases;
+
+    const shuffled = selectWithSeed(phases, "full", "session-001");
+
+    expect(shuffled.training).toEqual(phases.training);
+    expect(shuffled.testing).toHaveLength(12);
+    expect(shuffled.testing.map((trial) => trial.id)).not.toEqual(phases.testing.map((trial) => trial.id));
+    expect(shuffled.testing.map((trial) => trial.id)).toEqual(
+      selectWithSeed(phases, "full", "session-001").testing.map((trial) => trial.id),
+    );
+  });
+
+  it("shuffles the selected development testing rows without adding later rows", () => {
+    const trials = parseObjectMatchingCsv(`${header}\n${Array.from({ length: 15 }, (_, index) => row(index)).join("\n")}`);
+    const phases = splitObjectMatchingPhases(trials);
+    const selectWithSeed = selectObjectMatchingRunPhases as unknown as (
+      phases: ObjectMatchingTrialPhases,
+      mode: ObjectMatchingRunMode,
+      seed: string,
+    ) => ObjectMatchingTrialPhases;
+
+    const selected = selectWithSeed(phases, "development", "session-001");
+
+    expect(selected.training).toEqual(phases.training);
+    expect(selected.testing).toHaveLength(10);
+    expect(new Set(selected.testing.map((trial) => trial.id))).toEqual(
+      new Set(phases.testing.slice(0, 10).map((trial) => trial.id)),
+    );
   });
 
   it("scores the selected candidate against the private correct label", () => {

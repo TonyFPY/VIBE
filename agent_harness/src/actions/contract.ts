@@ -15,7 +15,8 @@ export interface ActionResult {
   error?: string;
 }
 
-export type AgentActionBatchType = "navigation" | "trial" | "wait";
+export type AgentActionBatchType = "navigation" | "fixation" | "trial" | "wait";
+export type AgentRecoveryKind = "model-output" | "provider-request";
 
 export interface AgentTurn {
   status: "actions" | "finished" | "recoverable" | "blocked";
@@ -24,4 +25,5 @@ export interface AgentTurn {
   actionBatchType?: AgentActionBatchType;
   providerIntent?: string;
   failureReason?: string;
+  recoveryKind?: AgentRecoveryKind;
 }
