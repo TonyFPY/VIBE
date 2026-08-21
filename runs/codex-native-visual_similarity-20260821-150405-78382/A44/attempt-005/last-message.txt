@@ -1,0 +1,1 @@
+INCOMPLETE: vibe_browser tool requires approval, but approval policy is `never`, so I cannot observe or control the experiment.

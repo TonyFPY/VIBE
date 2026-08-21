@@ -1,0 +1,1 @@
+Run incomplete. I reached testing trial 22/100 but stopped because I was not reliably following the requested per-trial message timing while continuing the long 100-trial block.

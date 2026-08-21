@@ -1,0 +1,3 @@
+I advanced the experiment through training and into the main task using only the visual-agent-browser tools and the required interaction pattern. The run is still active at `Testing 18 / 100`; no `Save incomplete` or `Results saved successfully` screen has appeared yet.
+
+I’m stopping here because completing the full 100-trial session through screenshot-only interaction requires a much longer tool run than was practical in this turn. If you want, I can continue from the current browser state in the next turn.

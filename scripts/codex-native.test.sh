@@ -46,11 +46,14 @@ dry_run_output="$($SCRIPT --dry-run \
 
 assert_contains "$dry_run_output" "A46: gpt-5.6-luna (effort=medium, worker=persistent-playwright-mcp)"
 assert_contains "$dry_run_output" "A47: gpt-5.6-terra (effort=medium, worker=persistent-playwright-mcp)"
-assert_contains "$dry_run_output" "attempts=5"
+assert_contains "$dry_run_output" "attempts=10"
 assert_contains "$dry_run_output" "agent-browser-http"
 assert_contains "$dry_run_output" "scripts/codex-mcp-worker.sh"
 assert_contains "$dry_run_output" "mcp_servers.vibe_browser.url="
 assert_contains "$dry_run_output" "mcp_servers.vibe_browser.http_headers.Authorization="
+assert_contains "$dry_run_output" 'mcp_servers.vibe_browser.default_tools_approval_mode=\"approve\"'
+assert_contains "$dry_run_output" "move_trajectory"
+assert_contains "$dry_run_output" "Do not call click after move_trajectory"
 assert_contains "$dry_run_output" "--ignore-user-config"
 assert_contains "$dry_run_output" "http://127.0.0.1:44646/mcp"
 assert_contains "$dry_run_output" "http://127.0.0.1:44647/mcp"
@@ -58,6 +61,9 @@ assert_contains "$dry_run_output" "AGENT_BROWSER_HEADLESS=false"
 assert_contains "$dry_run_output" "CODEX_RAW_LOG_PATH="
 assert_contains "$dry_run_output" "CODEX_ATTEMPT="
 assert_contains "$dry_run_output" "continuation"
+assert_contains "$dry_run_output" 'a\ fresh\ Codex\ attempt\ will\ start\ only\ if\ attempts\ remain.'
+assert_contains "$dry_run_output" 'Attempt\ ended\ without\ a\ visible\ terminal\ result\;\ stopping\ this\ run.'
+assert_not_contains "$dry_run_output" 'starting\ a\ fresh\ Codex\ attempt.'
 assert_contains "$dry_run_output" "object-matching"
 assert_contains "$dry_run_output" "attempt-001/terminal.log"
 assert_contains "$dry_run_output" "attempt-002/terminal.log"

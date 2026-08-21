@@ -5,6 +5,10 @@ export interface AgentBrowserViewport {
 
 export type ActionValidation = { valid: true } | { valid: false; error: string };
 
+// Keep trajectories bounded so one model action cannot monopolize the browser.
+export const MIN_TRAJECTORY_WAYPOINTS = 5;
+export const MAX_TRAJECTORY_WAYPOINTS = 25;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -33,6 +37,33 @@ export function validatePointerAction(
   }
   if (!isVisibleCoordinate(action.x, viewport.width) || !isVisibleCoordinate(action.y, viewport.height)) {
     return { valid: false, error: "Pointer coordinates must be finite CSS pixels inside the viewport" };
+  }
+  return { valid: true };
+}
+
+export function validateTrajectoryAction(
+  action: unknown,
+  viewport: AgentBrowserViewport,
+): ActionValidation {
+  if (!isRecord(action) || !hasOnlyKeys(action, ["waypoints"])) {
+    return { valid: false, error: "Pointer trajectory contains unsupported or missing fields" };
+  }
+  if (!Array.isArray(action.waypoints)
+    || action.waypoints.length < MIN_TRAJECTORY_WAYPOINTS
+    || action.waypoints.length > MAX_TRAJECTORY_WAYPOINTS) {
+    return {
+      valid: false,
+      error: `Pointer trajectory must contain ${MIN_TRAJECTORY_WAYPOINTS} through ${MAX_TRAJECTORY_WAYPOINTS} waypoints`,
+    };
+  }
+  for (const waypoint of action.waypoints) {
+    if (!isRecord(waypoint) || !hasOnlyKeys(waypoint, ["x", "y"])) {
+      return { valid: false, error: "Trajectory waypoints must contain only x and y" };
+    }
+    if (!isVisibleCoordinate(waypoint.x, viewport.width)
+      || !isVisibleCoordinate(waypoint.y, viewport.height)) {
+      return { valid: false, error: "Trajectory coordinates must be finite CSS pixels inside the viewport" };
+    }
   }
   return { valid: true };
 }

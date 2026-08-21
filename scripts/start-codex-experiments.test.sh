@@ -72,7 +72,7 @@ dry_run_output="$($SCRIPT --dry-run \
   --browser-launch external)"
 assert_contains "$dry_run_output" "A46: gpt-5.6-luna (effort=medium, worker=persistent-playwright-mcp)"
 assert_contains "$dry_run_output" "A47: gpt-5.6-terra (effort=medium, worker=persistent-playwright-mcp)"
-assert_contains "$dry_run_output" "attempts=5"
+assert_contains "$dry_run_output" "attempts=10"
 assert_contains "$dry_run_output" "gpt-5.6-luna-medium"
 assert_contains "$dry_run_output" "gpt-5.6-terra-medium"
 assert_contains "$dry_run_output" "codex exec"

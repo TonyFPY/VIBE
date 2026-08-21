@@ -1,0 +1,1 @@
+INCOMPLETE: no computer-use/browser-control tool is available in this session, so I can’t interact with the already-open Chrome window.

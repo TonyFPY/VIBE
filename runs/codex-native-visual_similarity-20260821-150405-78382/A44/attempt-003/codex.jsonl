@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a025b5-c5dc-78c0-b48b-6dbf5151f1b3"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll use only the `vibe_browser` screen-and-pointer tools and resume from the current visible state before doing anything else."}}
+{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":{"message":"MCP tool call requires approval, but approval policy is never"},"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"INCOMPLETE: vibe_browser MCP tool requires approval, but approval policy is never."}}
+{"type":"turn.completed","usage":{"input_tokens":48355,"cached_input_tokens":32896,"cache_write_input_tokens":0,"output_tokens":116,"reasoning_output_tokens":13}}

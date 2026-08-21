@@ -45,6 +45,30 @@ test("summarizes tool start, coordinates, status, and screenshots without image 
       {
         type: "item.completed",
         item: {
+          id: "item_trajectory",
+          type: "mcp_tool_call",
+          server: "vibe_browser",
+          tool: "move_trajectory",
+          arguments: {
+            waypoints: [
+              { x: 470, y: 334 },
+              { x: 380, y: 332 },
+              { x: 220, y: 333 },
+            ],
+          },
+          status: "completed",
+        },
+      },
+      { runId: "A48", attempt: 3 },
+    ),
+    "[A48 attempt 3] tool move_trajectory completed through 3 waypoints; clicked at (220, 333)",
+  );
+
+  assert.equal(
+    summarizeToolEvent(
+      {
+        type: "item.completed",
+        item: {
           id: "item_15",
           type: "mcp_tool_call",
           server: "vibe_browser",

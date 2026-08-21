@@ -1,0 +1,1 @@
+INCOMPLETE: The browser run stopped after detecting a repeated pointer sequence.

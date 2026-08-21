@@ -1,0 +1,1 @@
+Run incomplete. I completed training and 8 testing trials, and the experiment is currently at `Testing 9 / 100`. No browser stop or repeated-pointer error was reported; I did not reach a completion or save screen.

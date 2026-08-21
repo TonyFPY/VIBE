@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a020f3-a7d5-7fb2-bfd5-d4f65de2b0c0"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll use only the browser’s visual observation and pointer controls, following the experiment’s visible instructions and recording no hidden state."}}
+{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":{"message":"MCP tool call requires approval, but approval policy is never"},"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"I couldn’t access the visual-agent-browser: its `observe` call requires approval, but this session’s approval policy is set to “never.” No browser interaction was performed."}}
+{"type":"turn.completed","usage":{"input_tokens":48668,"cached_input_tokens":29184,"cache_write_input_tokens":0,"output_tokens":286,"reasoning_output_tokens":107}}

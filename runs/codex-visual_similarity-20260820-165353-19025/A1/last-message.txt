@@ -1,0 +1,1 @@
+I couldn’t access the visual-agent-browser: its `observe` call requires approval, but this session’s approval policy is set to “never.” No browser interaction was performed.

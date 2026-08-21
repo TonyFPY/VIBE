@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 
 import {
   buildViewerHtml,
@@ -33,6 +34,32 @@ test("lists human and agent participant sessions independently", async () => {
   assert.equal(humans.length, 1);
   assert.equal(agents.length, 2);
   assert.equal(agents.some((session) => session.sessionId.startsWith("ops_agent")), true);
+});
+
+test("orders participant ID dropdowns numerically", () => {
+  const sessions = ["12", "1", "11", "2"].map((participantId) => ({
+    sessionId: `ops_agent_${participantId}_20260820T000000Z_${participantId}`,
+    participantId,
+    participantType: "agent",
+    model: "google/gemini",
+    runMode: "ops",
+  }));
+  const snapshot = {
+    manifest: {},
+    sessions,
+    responses: sessions.map((session) => ({
+      sessionId: session.sessionId,
+      task: "visual_similarity",
+      trialId: "1",
+    })),
+    trajectories: [],
+  };
+  const dom = new JSDOM(buildViewerHtml(snapshot), { runScripts: "dangerously" });
+  const options = [...dom.window.document.querySelectorAll("#agent-id-filter option")]
+    .map((option) => option.textContent);
+
+  assert.deepEqual(options, ["1", "2", "11", "12"]);
+  dom.window.close();
 });
 
 test("embeds escaped data and comparison controls in standalone HTML", async () => {

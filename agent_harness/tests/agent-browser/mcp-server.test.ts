@@ -130,7 +130,7 @@ describe("VisualBrowserToolset MCP surface", () => {
     const fixture = await createFixture();
     const result = await fixture.client.listTools();
 
-    expect(result.tools.map((tool) => tool.name).sort()).toEqual(["click", "move", "observe", "wait"]);
+    expect(result.tools.map((tool) => tool.name).sort()).toEqual(["click", "move", "move_trajectory", "observe", "wait"]);
     const moveTool = result.tools.find((tool) => tool.name === "move");
     const waitTool = result.tools.find((tool) => tool.name === "wait");
    expect(moveTool?.inputSchema).toMatchObject({ properties: { type: {}, x: {}, y: {} } });
@@ -139,6 +139,89 @@ describe("VisualBrowserToolset MCP surface", () => {
     expect(waitTool?.inputSchema).toMatchObject({ required: ["milliseconds"] });
     expect(serialized(result)).not.toContain("evaluate");
     expect(serialized(result)).not.toContain("navigate");
+  });
+
+  it("executes and submits a full fixation-to-decision trajectory in one tool call", async () => {
+    const fixture = await createFixture();
+
+    await fixture.client.callTool({ name: "observe", arguments: {} });
+    const fixation = await fixture.client.callTool({
+      name: "click",
+      arguments: { type: "click", x: 547, y: 342 },
+    });
+    expect(fixation.isError).not.toBe(true);
+    await fixture.client.callTool({ name: "observe", arguments: {} });
+
+    const trajectory = await fixture.client.callTool({
+      name: "move_trajectory",
+      arguments: {
+        waypoints: [
+          { x: 470, y: 334 },
+          { x: 420, y: 333 },
+          { x: 380, y: 332 },
+          { x: 300, y: 333 },
+          { x: 220, y: 333 },
+        ],
+      },
+    });
+
+    expect(trajectory.isError).not.toBe(true);
+    expect(trajectory.content).toEqual([{ type: "text", text: "Pointer trajectory and response click completed at (220, 333)" }]);
+    expect(fixture.host.session.actions).toEqual([
+      ["screenshot", 90],
+      ["click", 547, 342],
+      ["screenshot", 90],
+      ["move", 470, 334],
+      ["move", 420, 333],
+      ["move", 380, 332],
+      ["move", 300, 333],
+      ["move", 220, 333],
+      ["click", 220, 333],
+    ]);
+    expect(fixture.logger.events).toContainEqual(expect.objectContaining({
+      type: "trajectory-executed",
+      start: { x: 547, y: 342 },
+      waypoints: [
+        { x: 470, y: 334 },
+        { x: 420, y: 333 },
+        { x: 380, y: 332 },
+        { x: 300, y: 333 },
+        { x: 220, y: 333 },
+      ],
+      end: { x: 220, y: 333 },
+    }));
+    expect(fixture.logger.events).toContainEqual(expect.objectContaining({
+      type: "action-executed",
+      actionType: "click",
+      x: 220,
+      y: 333,
+    }));
+  });
+
+  it("rejects a trajectory before any fixation-center pointer position exists", async () => {
+    const fixture = await createFixture();
+    await fixture.client.callTool({ name: "observe", arguments: {} });
+
+    const result = await fixture.client.callTool({
+      name: "move_trajectory",
+      arguments: {
+        waypoints: [
+          { x: 470, y: 334 },
+          { x: 420, y: 333 },
+          { x: 380, y: 332 },
+          { x: 300, y: 333 },
+          { x: 220, y: 333 },
+        ],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(fixture.host.session.actions).toEqual([["screenshot", 90]]);
+    expect(fixture.logger.events).toContainEqual(expect.objectContaining({
+      type: "action-rejected",
+      actionType: "move_trajectory",
+      error: "Trajectory requires a current pointer position from the fixation click",
+    }));
   });
 
   it("returns only a JPEG image for observation and keeps browser state private", async () => {

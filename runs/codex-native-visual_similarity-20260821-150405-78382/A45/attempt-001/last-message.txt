@@ -1,0 +1,1 @@
+INCOMPLETE: `vibe_browser` MCP server is not usable in this session because its tool calls require approval while approval policy is `never`.

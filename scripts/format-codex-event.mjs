@@ -48,6 +48,18 @@ function coordinates(args = {}) {
   return x === undefined || y === undefined ? undefined : `(${x}, ${y})`;
 }
 
+function trajectoryWaypointCount(args = {}) {
+  return Array.isArray(args.waypoints) ? args.waypoints.length : undefined;
+}
+
+function trajectoryEndpoint(args = {}) {
+  const waypoints = Array.isArray(args.waypoints) ? args.waypoints : [];
+  const endpoint = waypoints.at(-1);
+  return endpoint && Number.isFinite(endpoint.x) && Number.isFinite(endpoint.y)
+    ? `(${endpoint.x}, ${endpoint.y})`
+    : undefined;
+}
+
 function completionSummary(tool, args = {}, result = {}) {
   if (tool === "observe") return "screenshot updated";
   if (tool === "wait" && hasImage(result.content)) return "screenshot updated";
@@ -66,11 +78,16 @@ export function summarizeToolEvent(event, context = {}) {
   const { item } = event;
   const tool = item.tool ?? "tool";
   const coord = coordinates(item.arguments);
+  const trajectoryCount = trajectoryWaypointCount(item.arguments);
+  const trajectoryEnd = trajectoryEndpoint(item.arguments);
   const errorText = truncate(normalizeWhitespace(sanitizeTerminalPayloadText(formatError(item.error))));
 
   if (event.type === "item.started") {
     if (tool === "wait" && Number.isFinite(item.arguments?.milliseconds)) {
       return `${prefix(context)} tool wait started for ${item.arguments.milliseconds}ms`;
+    }
+    if (tool === "move_trajectory" && trajectoryCount !== undefined) {
+      return `${prefix(context)} tool move_trajectory started with ${trajectoryCount} waypoints`;
     }
     if (coord) return `${prefix(context)} tool ${tool} started at ${coord}`;
     return `${prefix(context)} tool ${tool} started`;
@@ -87,6 +104,11 @@ export function summarizeToolEvent(event, context = {}) {
       return suffix === "screenshot updated"
         ? `${prefix(context)} tool wait completed after ${item.arguments.milliseconds}ms; ${suffix}`
         : `${prefix(context)} tool wait completed after ${item.arguments.milliseconds}ms`;
+    }
+
+    if (tool === "move_trajectory" && trajectoryCount !== undefined) {
+      const clickSuffix = trajectoryEnd ? `; clicked at ${trajectoryEnd}` : "";
+      return `${prefix(context)} tool move_trajectory completed through ${trajectoryCount} waypoints${clickSuffix}`;
     }
 
     const suffix = completionSummary(tool, item.arguments, item.result);

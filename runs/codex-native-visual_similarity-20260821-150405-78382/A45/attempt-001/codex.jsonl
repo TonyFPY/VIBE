@@ -1,0 +1,8 @@
+{"type":"thread.started","thread_id":"01a025b5-8198-7da1-9e54-c3a3228eea9d"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’m connecting to the configured `vibe_browser` tools and will drive the existing browser session strictly through screenshots and pointer actions."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I have the `vibe_browser` tools. I’m observing the live experiment screen now and will proceed trial by trial from the newest screenshot after each click."}}
+{"type":"item.started","item":{"id":"item_2","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":{"message":"MCP tool call requires approval, but approval policy is never"},"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"INCOMPLETE: `vibe_browser` MCP server is not usable in this session because its tool calls require approval while approval policy is `never`."}}
+{"type":"turn.completed","usage":{"input_tokens":46056,"cached_input_tokens":32384,"cache_write_input_tokens":0,"output_tokens":257,"reasoning_output_tokens":96}}

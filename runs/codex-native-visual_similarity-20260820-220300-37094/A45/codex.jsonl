@@ -1,0 +1,8 @@
+{"type":"non_json_output","text":"error: unexpected argument '--ask-for-approval' found"}
+{"type":"non_json_output","text":""}
+{"type":"non_json_output","text":"  tip: to pass '--ask-for-approval' as a value, use '-- --ask-for-approval'"}
+{"type":"non_json_output","text":""}
+{"type":"non_json_output","text":"Usage: codex exec [OPTIONS] [PROMPT]"}
+{"type":"non_json_output","text":"       codex exec [OPTIONS] <COMMAND> [ARGS]"}
+{"type":"non_json_output","text":""}
+{"type":"non_json_output","text":"For more information, try '--help'."}

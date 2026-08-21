@@ -1,0 +1,3 @@
+I did not complete the full experiment. The run advanced normally through training and into the main block, and I reached `Testing 18 / 100` using only visible pointer interaction with fixation clicks first and staged cursor movements before response clicks.
+
+No `Save incomplete`, `Download results`, `Download trajectories`, or `Results saved successfully` screen appeared during the run, so there was no valid stop/save flow to trigger under your rules.

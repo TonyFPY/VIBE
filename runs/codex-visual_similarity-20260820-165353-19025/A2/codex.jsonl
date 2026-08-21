@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a020f3-a7d5-72f2-84a5-d67f5900414f"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll complete it strictly through the rendered screen, using only the visual browser controls."}}
+{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":{"message":"MCP tool call requires approval, but approval policy is never"},"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"I’m blocked: the visual browser’s `observe` call requires approval, but this session’s policy forbids approvals. I can’t access or complete the experiment without it."}}
+{"type":"turn.completed","usage":{"input_tokens":43608,"cached_input_tokens":27136,"cache_write_input_tokens":0,"output_tokens":217,"reasoning_output_tokens":58}}

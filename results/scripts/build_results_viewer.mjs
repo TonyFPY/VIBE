@@ -73,11 +73,18 @@ function sessionTaskSet(snapshot, sessionId) {
   return new Set(snapshot.responses.filter((response) => response.sessionId === sessionId).map((response) => response.task));
 }
 
+const participantIdCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+function compareParticipantIds(left, right) {
+  return participantIdCollator.compare(String(left ?? ""), String(right ?? ""));
+}
+
 export function participantSessions(snapshot, task, participantType) {
   return snapshot.sessions
     .filter((session) => (!task || sessionTaskSet(snapshot, session.sessionId).has(task))
       && (!participantType || session.participantType === participantType))
-    .sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+    .sort((left, right) => compareParticipantIds(left.participantId, right.participantId)
+      || left.sessionId.localeCompare(right.sessionId));
 }
 
 function escapeHtml(value) {
@@ -164,6 +171,8 @@ export function buildViewerHtml(snapshot) {
   const byId = new Map(DATA.sessions.map((session) => [session.sessionId, session]));
   const taskSet = [...new Set(DATA.responses.map((row) => row.task).filter(Boolean))].sort();
   const modelSet = [...new Set(DATA.sessions.map((session) => session.model).filter(Boolean))].sort();
+  const participantIdCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  const compareParticipantIds = (left, right) => participantIdCollator.compare(String(left ?? ""), String(right ?? ""));
   const responseRows = (sessionId, task) => DATA.responses.filter((row) => row.sessionId === sessionId && (!task || row.task === task));
   const trajectoryRows = (sessionId, task) => DATA.trajectories.filter((row) => row.sessionId === sessionId && (!task || row.task === task));
   const taskForSession = (sessionId, task) => responseRows(sessionId, task).length > 0;
@@ -175,7 +184,8 @@ export function buildViewerHtml(snapshot) {
         && session.participantType === participantType
         && (run === "all" || session.runMode === run)
         && (participantType !== "agent" || model === "all" || session.model === model))
-      .sort((a, b) => a.sessionId.localeCompare(b.sessionId));
+      .sort((a, b) => compareParticipantIds(a.participantId, b.participantId)
+        || a.sessionId.localeCompare(b.sessionId));
   }
   function participantOptions(task, participantType) {
     const seen = new Set();

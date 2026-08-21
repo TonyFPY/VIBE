@@ -1,0 +1,29 @@
+Use the configured vibe_browser MCP server to complete this experiment through screenshots and pointer actions only:
+https://vibe-9d6e5.web.app/tasks/visual-similarity?run=ops&participant_id=A53&model=gpt-5.6-sol-medium
+
+Use only the MCP tools exposed by vibe_browser: observe, move_trajectory, move, click, and wait. Do not use Playwright directly, chromium.connectOverCDP, raw CDP, DevTools, shell commands, DOM inspection, accessibility data, source code, files, network requests, task configuration, hidden state, OCR/helper tools, or fallback attachment paths. If the vibe_browser MCP server is unavailable, report INCOMPLETE immediately; do not try another browser-control mechanism.
+
+Rules:
+- For every trial, click the visible fixation marker (+) first.
+- For every testing trial, after clicking the cross and observing the stimuli, call move_trajectory once. It starts at the current fixation-center pointer position, executes the ordered path, and immediately clicks the final waypoint before returning. Provide 5 to 25 ordered waypoints, use the middle waypoints for the visible trajectory, and make the final waypoint the center of the chosen response image. Do not call click after move_trajectory.
+- Do not emit separate move calls for a testing response path or jump directly from the fixation marker to a candidate with one direct click.
+- Re-observe the current screen after each click and choose each response from the newest visible screen.
+- Continue until the browser visibly shows "Results saved successfully" or the manual-save/download screen.
+- Do not stop because the experiment is long. An early final answer is an incomplete run.
+- If "Save incomplete" appears, click "Download results", then "Download trajectories", and stop.
+- If "Results saved successfully" appears, do not click a download button: the API already saved both files. Stop.
+
+For concise logging, after each completed testing trial write one short message only:
+'Trial N: [brief visible description]; [selected position] is the match.'
+Do not narrate coordinates, pointer movements, or reasoning.
+
+Only after the visible end state, report one of:
+- RESULTS_SAVED
+- RESULTS_DOWNLOADED
+- INCOMPLETE: <short reason>
+
+Continuation / attempt instructions:
+This is continuation attempt 8 after a previous Codex context stopped before completion. Reconnect to the existing MCP browser worker and existing experiment page. Do not restart, do not navigate, and do not click Start unless it is visibly still the current page. First call observe before any pointer input, reassess from the newest screenshot, and continue using the same public task instruction above.
+
+Attempt-specific start rule:
+- Do not click Start or restart the experiment. Resume from the current visible state; click Continue only if it is the current next control in the existing flow.

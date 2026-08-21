@@ -1,0 +1,1 @@
+Run is incomplete. I advanced the experiment through `Testing 13 / 100` using only screenshot-based pointer interaction and logged trial messages through Trial 12, but I did not finish the full experiment or reach a save/completion screen.

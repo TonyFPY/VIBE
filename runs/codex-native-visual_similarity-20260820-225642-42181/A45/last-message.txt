@@ -1,0 +1,1 @@
+INCOMPLETE: Chrome control is not available in this session, and the fallback attachment paths to the already-open Chrome window are blocked here, so I cannot safely interact with the experiment without violating your constraints.

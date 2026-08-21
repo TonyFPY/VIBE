@@ -50,16 +50,17 @@ scripts/codex.sh \
 scripts/codex.sh \
   --task visual-similarity \
   --model gpt-5.6-luna gpt-5.6-terra gpt-5.6-sol gpt-5.5 gpt-5.4 \
-  --id 41 42 43 44 45 \
+  --id 51 52 53 54 55 \
   --run ops \
   --effort medium
 
 scripts/codex.sh \
   --task visual-similarity \
-  --model gpt-5.5 gpt-5.4 \
-  --id 44 45 \
+  --model gpt-5.4 \
+  --id 45 \
   --run ops \
-  --effort medium
+  --effort medium \
+  --headed 45
 
 ### Object Matching Task
 
@@ -98,20 +99,17 @@ scripts/codex.sh \
 scripts/codex.sh \
   --task object-matching \
   --model gpt-5.6-luna gpt-5.6-terra gpt-5.6-sol gpt-5.5 gpt-5.4 \
-  --id 46 47 48 49 50 \
+  --id 56 57 58 59 60 \
   --run ops \
   --effort medium
 
-The command stays `scripts/codex.sh`; the wrapper now forwards to the native
-persistent MCP launcher without changing flags or argument order.
-
 scripts/codex.sh \
   --task object-matching \
-  --model gpt-5.6-luna gpt-5.4 \
-  --id 46 50 \
+  --model gpt-5.4 \
+  --id 50 \
   --run ops \
   --effort medium \
-  --allow-shared-browser
+  --headed 50
 
 Codex runs now use the repository's persistent Playwright MCP worker path.
 Use `--dry-run` to inspect each Codex command before starting tmux. Each fresh
@@ -119,13 +117,21 @@ Use `--dry-run` to inspect each Codex command before starting tmux. Each fresh
 token inline, so the model reconnects to the existing browser/controller
 instead of launching a second browser for the same participant ID. Every
 `codex exec` attempt includes `--ignore-user-config` while keeping the
-`vibe_browser` MCP server configured inline, so user-level MCP servers cannot
-bypass the four-tool screenshot-only boundary. The launcher does not call
+`vibe_browser` MCP server configured inline. It also sets
+`mcp_servers.vibe_browser.default_tools_approval_mode="approve"` for that
+private five-tool server, so headless `codex exec` does not reject its MCP
+calls when the session approval policy is `never`; this does not approve shell,
+filesystem, or any other MCP server. User-level MCP servers cannot bypass the
+five-tool screenshot-only boundary. Testing response paths use one bounded
+`move_trajectory` MCP call, which executes the ordered waypoints locally before
+the final response click in the same request, avoiding a model round trip per
+waypoint or after the trajectory. The
+launcher does not call
 `codex mcp add`, does not modify the user's global Codex configuration, and
 does not allow Chrome-plugin, raw CDP, or direct Playwright fallbacks from the
 model.
 
-Each run allows five Codex turns by default. If a turn ends with
+Each run allows ten Codex turns by default. If a turn ends with
 `INCOMPLETE` before the visible save screen, the launcher starts a fresh
 continuation turn and resumes the existing experiment tab. Override this with
 `--max-attempts N` (1–10). A non-zero Codex process error still stops that run

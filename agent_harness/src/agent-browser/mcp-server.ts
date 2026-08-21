@@ -1,7 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 
-import { validatePointerAction, validateWaitAction } from "./action-policy";
+import {
+  MAX_TRAJECTORY_WAYPOINTS,
+  MIN_TRAJECTORY_WAYPOINTS,
+  validatePointerAction,
+  validateTrajectoryAction,
+  validateWaitAction,
+} from "./action-policy";
 import type { AgentBrowserConfig } from "./run-config";
 import type { BrowserHost, BrowserSession } from "../browser/browser-types";
 import type { RunLogEvent, RunLoggerPort } from "../logging/run-logger";
@@ -13,12 +19,21 @@ export interface VisualBrowserToolsetOptions {
 }
 
 export type ToolActionResult = { ok: true } | { ok: false; message: string };
-type PointerAction = { type: "move" | "click"; x: number; y: number };
+type PointerPoint = { x: number; y: number };
+type PointerAction = PointerPoint & { type: "move" | "click" };
+type PointerMoveAction = PointerPoint & { type: "move" };
+type TrajectoryActionResult = { ok: true; end: PointerPoint } | { ok: false; message: string };
 
 const pointerInputSchema = z.object({
   type: z.enum(["move", "click"]).describe("must match the MCP tool"),
   x: z.number().describe("visible CSS-pixel x coordinate"),
   y: z.number().describe("visible CSS-pixel y coordinate"),
+}).passthrough();
+const trajectoryInputSchema = z.object({
+  waypoints: z.array(z.object({
+    x: z.number().describe("visible CSS-pixel x coordinate"),
+    y: z.number().describe("visible CSS-pixel y coordinate"),
+  }).passthrough()).min(MIN_TRAJECTORY_WAYPOINTS).max(MAX_TRAJECTORY_WAYPOINTS),
 }).passthrough();
 const waitInputSchema = z.object({
   milliseconds: z.number().describe("wait duration from 0 through 5000 milliseconds"),
@@ -54,7 +69,8 @@ export class VisualBrowserToolset {
   private observationCount = 0;
   private hasObserved = false;
   private requiresObservation = true;
-  private pendingMoves: Array<Extract<PointerAction, { type: "move" }>> = [];
+  private pendingMoves: PointerMoveAction[] = [];
+  private lastPointerPosition?: PointerPoint;
   private lastPointerSequenceSignature?: string;
   private repeatedPointerSequenceCount = 0;
   private abortedReason?: string;
@@ -94,6 +110,10 @@ export class VisualBrowserToolset {
 
   async move(input: unknown): Promise<ToolActionResult> {
     return this.runExclusive(() => this.pointerAction("move", input));
+  }
+
+  async moveTrajectory(input: unknown): Promise<TrajectoryActionResult> {
+    return this.runExclusive(() => this.trajectoryAction(input));
   }
 
   async click(input: unknown): Promise<ToolActionResult> {
@@ -209,10 +229,12 @@ export class VisualBrowserToolset {
       const session = await this.ensureSession();
       if (actionType === "move") {
         await session.move(action.x, action.y);
-        this.pendingMoves.push(action as Extract<PointerAction, { type: "move" }>);
+        this.pendingMoves.push(action as PointerMoveAction);
+        this.lastPointerPosition = { x: action.x, y: action.y };
       } else {
         await session.click(action.x, action.y);
         this.pendingMoves = [];
+        this.lastPointerPosition = { x: action.x, y: action.y };
         this.requiresObservation = true;
       }
       await this.log({
@@ -224,6 +246,76 @@ export class VisualBrowserToolset {
       return { ok: true };
     } catch {
       await this.log({ type: "action-failed", actionType });
+      return { ok: false, message: "Browser action failed" };
+    }
+  }
+
+  private async trajectoryAction(input: unknown): Promise<TrajectoryActionResult> {
+    const validation = validateTrajectoryAction(input, this.options.config.viewport);
+    if (!validation.valid) {
+      await this.log({
+        type: "action-rejected",
+        actionType: "move_trajectory",
+        error: validation.error,
+      });
+      return { ok: false, message: "Invalid pointer trajectory" };
+    }
+    if (this.abortedReason) {
+      await this.log({
+        type: "action-rejected",
+        actionType: "move_trajectory",
+        error: "Run stopped after abnormal pointer behavior",
+      });
+      return { ok: false, message: "Run stopped after abnormal pointer behavior" };
+    }
+    if (!this.hasObserved || this.requiresObservation) {
+      await this.log({
+        type: "action-rejected",
+        actionType: "move_trajectory",
+        error: "Fresh visible observation required before pointer input",
+      });
+      return { ok: false, message: "Fresh visible observation required before pointer input" };
+    }
+    if (!this.lastPointerPosition) {
+      const error = "Trajectory requires a current pointer position from the fixation click";
+      await this.log({ type: "action-rejected", actionType: "move_trajectory", error });
+      return { ok: false, message: error };
+    }
+
+    const waypoints = (input as { waypoints: PointerPoint[] }).waypoints;
+    const start = this.lastPointerPosition;
+    let executedWaypointCount = 0;
+    try {
+      const session = await this.ensureSession();
+      for (const waypoint of waypoints) {
+        // These moves are deliberately sequential inside one MCP request. The
+        // model pays one tool round trip while the browser still sees the
+        // complete ordered trajectory.
+        await session.move(waypoint.x, waypoint.y);
+        this.pendingMoves.push({ type: "move", x: waypoint.x, y: waypoint.y });
+        this.lastPointerPosition = { x: waypoint.x, y: waypoint.y };
+        executedWaypointCount += 1;
+      }
+      const end = waypoints[waypoints.length - 1];
+      await this.log({
+        type: "trajectory-executed",
+        start,
+        waypoints,
+        end,
+      });
+      const clickResult = await this.pointerAction("click", {
+        type: "click",
+        x: end.x,
+        y: end.y,
+      });
+      if (!clickResult.ok) return clickResult;
+      return { ok: true, end };
+    } catch {
+      await this.log({
+        type: "action-failed",
+        actionType: "move_trajectory",
+        executedWaypointCount,
+      });
       return { ok: false, message: "Browser action failed" };
     }
   }
@@ -277,9 +369,10 @@ export function createVisualBrowserMcpServer(toolset: VisualBrowserToolset): Mcp
     {
       instructions: [
         "This server exposes only the visible experiment screen and pointer actions.",
-        "Use observe to see the screen. Use move and click with visible CSS-pixel coordinates.",
+        "Use observe to see the screen. Use click for fixation and response clicks, and move_trajectory for one ordered visible path through intermediate CSS-pixel waypoints.",
         "Use wait for loading states. Do not expect DOM, source, network, filesystem, or hidden task information.",
         "After every click, call observe or wait and receive a fresh screenshot before any further pointer input.",
+        "For a response path, call move_trajectory once after the fixation screenshot; it executes the path and clicks the final waypoint before returning.",
         "Do not pre-plan or replay multiple trials. Choose each response from its newest screenshot.",
         "If the server reports repeated pointer behavior or a stopped run, stop and report the run as incomplete.",
       ].join(" "),
@@ -302,6 +395,16 @@ export function createVisualBrowserMcpServer(toolset: VisualBrowserToolset): Mcp
   }, async (input) => {
     const result = await toolset.move(input);
     return result.ok ? textResult("Pointer moved") : textResult(result.message, true);
+  });
+
+  server.registerTool("move_trajectory", {
+    description: "Move from the current pointer position through 5 to 25 ordered visible CSS-pixel waypoints, then click the final point before returning. Use intermediate points for the response trajectory and make the final point the chosen response.",
+    inputSchema: trajectoryInputSchema,
+  }, async (input) => {
+    const result = await toolset.moveTrajectory(input);
+    return result.ok
+      ? textResult(`Pointer trajectory and response click completed at (${result.end.x}, ${result.end.y})`)
+      : textResult(result.message, true);
   });
 
   server.registerTool("click", {

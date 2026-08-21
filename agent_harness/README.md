@@ -161,7 +161,7 @@ The run root also keeps `prompt-public.txt`, `events.jsonl`, `worker.log`,
 command printed by the launcher; stop the whole batch with
 `tmux kill-session -t <name>`.
 
-Each run allows five Codex turns by default. If a turn ends with `INCOMPLETE`
+Each run allows ten Codex turns by default. If a turn ends with `INCOMPLETE`
 before the visible save screen, the launcher starts a fresh continuation turn
 and resumes the existing experiment tab instead of restarting the task or
 launching a second worker for that ID. The continuation prompt explicitly tells
@@ -179,11 +179,21 @@ statuses, and usage remain visible.
 
 The launcher passes the MCP URL and bearer token inline to each fresh
 `codex exec` attempt and always includes `--ignore-user-config`, so user-level
-MCP servers cannot extend the screenshot-only `vibe_browser` boundary. It does
-not call `codex mcp add`, does not modify global Codex configuration, and does
-not rely on Chrome-plugin bootstrap, raw CDP, or direct Playwright access from
-the model. The tmux windows show formatted execution logs rather than the
-interactive Codex TUI.
+MCP servers cannot extend the screenshot-only `vibe_browser` boundary. The
+attempt also sets
+`mcp_servers.vibe_browser.default_tools_approval_mode="approve"` only for the
+private five-tool server. This lets headless `codex exec` call the browser MCP
+server when the session approval policy is `never`; it does not approve shell,
+filesystem, or other MCP tools. The launcher does not call `codex mcp add`, does
+not modify global Codex configuration, and does not rely on Chrome-plugin
+bootstrap, raw CDP, or direct Playwright access from the model. The tmux windows
+show formatted execution logs rather than the interactive Codex TUI.
+
+For testing responses, Codex calls `move_trajectory` once with ordered visible
+waypoints. The MCP worker executes those browser moves sequentially inside one
+tool request and clicks the final point before returning; this avoids a model
+round trip for every waypoint and for the final response while preserving both
+the trajectory and response click in the run log.
 
 Codex MCP workers are headless by default. Use `--headed <id...>` to open a
 visible Chromium worker for selected participant IDs. The compatibility modes
