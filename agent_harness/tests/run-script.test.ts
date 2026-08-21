@@ -172,4 +172,44 @@ setInterval(() => {}, 1000);
       await rm(temporaryRoot, { recursive: true, force: true });
     }
   }, 10_000);
+
+  it("ignores npm banner lines before the worker URL", async () => {
+    const temporaryRoot = await mkdtemp(join(tmpdir(), "codex-mcp-worker-banner-"));
+    const fakeNpm = join(temporaryRoot, "npm");
+    await writeFile(fakeNpm, `#!/usr/bin/env node
+process.stdout.write("\\n> agent-browser-http\\n> tsx src/agent-browser/http-server-main.ts\\n\\n");
+process.stdout.write("http://127.0.0.1:45679/mcp\\n");
+setInterval(() => {}, 1000);
+`, "utf8");
+    await chmod(fakeNpm, 0o755);
+
+    const runDirectory = join(temporaryRoot, "A47");
+    const manifestPath = join(runDirectory, "mcp-connection.json");
+    const child = spawn("bash", [
+      resolve(repositoryRoot, "scripts/codex-mcp-worker.sh"),
+      "--run-dir", runDirectory,
+      "--run-id", "A47",
+      "--url", "https://vibe-9d6e5.web.app/tasks/object-matching?run=ops&participant_id=A47&model=gpt-5.6-luna-medium",
+      "--manifest", manifestPath,
+      "--port", "45679",
+    ], {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        PATH: `${temporaryRoot}:${process.env.PATH ?? ""}`,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const childExit = new Promise((resolve) => child.once("exit", resolve));
+
+    try {
+      await waitForFile(manifestPath);
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      expect(manifest.url).toBe("http://127.0.0.1:45679/mcp");
+    } finally {
+      child.kill("SIGTERM");
+      await childExit;
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  }, 10_000);
 });

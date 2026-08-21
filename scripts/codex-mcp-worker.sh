@@ -144,7 +144,7 @@ for _ in {1..200}; do
     wait "$WORKER_PID"
   fi
   if [[ -s "$READY_FILE" ]]; then
-    MCP_URL="$(sed -n '1p' "$READY_FILE")"
+    MCP_URL="$(grep -Eom1 '^http://(127\.0\.0\.1|localhost):[0-9]+/.+' "$READY_FILE" || true)"
     if [[ "$MCP_URL" =~ ^http://(127\.0\.0\.1|localhost):[0-9]+/.+ ]]; then
       break
     fi

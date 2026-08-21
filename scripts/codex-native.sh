@@ -80,6 +80,14 @@ toml_quote() {
   printf '"%s"' "$value"
 }
 
+validate_safe_path() {
+  local option="$1"
+  local path="$2"
+  [[ "$path" == /* ]] || fail "$option must resolve to an absolute path"
+  [[ "$path" =~ ^[A-Za-z0-9._/-]+$ ]] || fail "$option contains unsupported characters"
+  [[ "$path" != *"/../"* && "$path" != */.. && "$path" != *"/./"* ]] || fail "$option must not contain dot path segments"
+}
+
 TASK=""
 HOST="$DEFAULT_HOST"
 RUN_MODE="$DEFAULT_RUN_MODE"
@@ -250,6 +258,7 @@ if [[ -z "$RUNS_DIR" ]]; then
 elif [[ "$RUNS_DIR" != /* ]]; then
   RUNS_DIR="$(pwd -P)/$RUNS_DIR"
 fi
+validate_safe_path "--runs-dir" "$RUNS_DIR"
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
   command -v tmux >/dev/null 2>&1 || fail "tmux is required"
@@ -342,7 +351,7 @@ build_codex_command() {
     --model "$model"
     --config "model_reasoning_effort=$(toml_quote "$EFFORT")"
     --config "mcp_servers.vibe_browser.url=$(toml_quote "$mcp_url")"
-    --config "mcp_servers.vibe_browser.headers.Authorization=$(toml_quote "Bearer $bearer_token")"
+    --config "mcp_servers.vibe_browser.http_headers.Authorization=$(toml_quote "Bearer $bearer_token")"
     --cd "$run_dir"
     --disable shell_tool
     --disable unified_exec
@@ -433,19 +442,32 @@ print_run() {
   printf -v status_file_quoted '%q' "$run_dir/status.txt"
   local manifest_quoted
   printf -v manifest_quoted '%q' "$manifest"
-  local initial_template_quoted
-  printf -v initial_template_quoted '%q' "$initial_codex_template"
-  local continuation_template_quoted
-  printf -v continuation_template_quoted '%q' "$continuation_codex_template"
+  local worker_log_quoted
+  printf -v worker_log_quoted '%q' "$run_dir/worker.log"
+  local run_dir_quoted
+  printf -v run_dir_quoted '%q' "$run_dir"
+  local model_quoted
+  printf -v model_quoted '%q' "$model"
+  local codex_bin_quoted
+  printf -v codex_bin_quoted '%q' "$CODEX_BIN"
+  local effort_config_quoted
+  printf -v effort_config_quoted '%q' "model_reasoning_effort=$(toml_quote "$EFFORT")"
+  local initial_prompt_file="$run_dir/prompt-initial.txt"
+  local continuation_prompt_file="$run_dir/prompt-continuation.txt"
+  local initial_prompt_quoted
+  printf -v initial_prompt_quoted '%q' "$initial_prompt_file"
+  local continuation_prompt_quoted
+  printf -v continuation_prompt_quoted '%q' "$continuation_prompt_file"
+  if [[ "$DRY_RUN" -eq 0 ]]; then
+    build_prompt "$url" 1 > "$initial_prompt_file"
+    build_prompt "$url" 2 > "$continuation_prompt_file"
+    chmod 600 "$initial_prompt_file" "$continuation_prompt_file"
+  fi
   local output_filter_command
   printf -v output_filter_command '%q %q' "$NODE_BIN" "$CODEX_OUTPUT_FILTER"
-  local initial_pipeline
-  initial_pipeline="eval \"\$initial_codex_command\" 2>&1 | $output_filter_command | tee -a $log_file_quoted"
-  local continuation_pipeline
-  continuation_pipeline="eval \"\$continuation_codex_command\" 2>&1 | $output_filter_command | tee -a $log_file_quoted"
 
   local command_string
-  command_string="set -uo pipefail; cleanup() { if [[ -n \"\${worker_pid:-}\" ]]; then kill \"\$worker_pid\" 2>/dev/null || true; wait \"\$worker_pid\" 2>/dev/null || true; fi; }; trap cleanup EXIT INT TERM; $worker_command > $run_dir/worker.log 2>&1 & worker_pid=\$!; for readiness_attempt in {1..400}; do if [[ -s $manifest_quoted ]]; then break; fi; if ! kill -0 \"\$worker_pid\" 2>/dev/null; then printf '%s\\n' worker-error > $status_file_quoted; printf '\\nMCP worker exited before readiness. Logs: %s\\n' $run_dir/worker.log; read -r; exit 1; fi; sleep 0.05; done; if [[ ! -s $manifest_quoted ]]; then printf '%s\\n' worker-timeout > $status_file_quoted; printf '\\nTimed out waiting for MCP worker manifest. Logs: %s\\n' $run_dir/worker.log; read -r; exit 1; fi; mcp_url=\$(sed -n 's/.*\"url\": \"\\([^\"]*\\)\".*/\\1/p' $manifest_quoted); bearer_token=\$(sed -n 's/.*\"bearerToken\": \"\\([^\"]*\\)\".*/\\1/p' $manifest_quoted); if [[ ! \"\$mcp_url\" =~ ^http://(127\\.0\\.0\\.1|localhost):[0-9]+/.+ || ! \"\$bearer_token\" =~ ^[a-f0-9]{64}$ ]]; then printf '%s\\n' worker-manifest-error > $status_file_quoted; printf '\\nCould not read MCP worker manifest.\\n'; read -r; exit 1; fi; initial_codex_command=$initial_template_quoted; continuation_codex_command=$continuation_template_quoted; initial_codex_command=\${initial_codex_command//__MCP_URL__/\$mcp_url}; initial_codex_command=\${initial_codex_command//__MCP_TOKEN__/\$bearer_token}; continuation_codex_command=\${continuation_codex_command//__MCP_URL__/\$mcp_url}; continuation_codex_command=\${continuation_codex_command//__MCP_TOKEN__/\$bearer_token}; printf '\\n%s Browser and MCP worker ready.\\n' \"$run_id\"; attempt=1; run_status=incomplete; codex_status=0; while [[ \"\$attempt\" -le \"$MAX_ATTEMPTS\" ]]; do if [[ \"\$attempt\" -gt 1 ]]; then printf '\\nStarting Codex continuation attempt %s/%s for the existing MCP/browser worker.\\n' \"\$attempt\" \"$MAX_ATTEMPTS\"; fi; if [[ \"\$attempt\" -eq 1 ]]; then $initial_pipeline; codex_status=\${PIPESTATUS[0]}; else $continuation_pipeline; codex_status=\${PIPESTATUS[0]}; fi; if [[ \"\$codex_status\" -ne 0 ]]; then run_status=error; break; elif [[ -f $last_message_quoted ]] && grep -Eqi 'RESULTS_SAVED|Results saved successfully' $last_message_quoted; then run_status=completed; break; elif [[ -f $last_message_quoted ]] && grep -Eqi 'RESULTS_DOWNLOADED|Download trajectories|Download results' $last_message_quoted; then run_status=manual-save; break; else run_status=incomplete; fi; if [[ \"\$attempt\" -lt \"$MAX_ATTEMPTS\" ]]; then attempt=\$((attempt + 1)); else break; fi; done; if [[ \"\$run_status\" == incomplete && \"\$attempt\" -ge \"$MAX_ATTEMPTS\" ]]; then printf '\\nCodex continuation attempts exhausted (%s).\\n' \"$MAX_ATTEMPTS\"; fi; printf '%s\\n' \"\$run_status\" > $status_file_quoted; printf '\\nNative Codex status: %s (exit=%s, attempts=%s). Logs: %s\\n' \"\$run_status\" \"\$codex_status\" \"\$attempt\" $log_file_quoted; read -r"
+  command_string="set -uo pipefail; cleanup() { if [[ -n \"\${worker_pid:-}\" ]]; then kill \"\$worker_pid\" 2>/dev/null || true; wait \"\$worker_pid\" 2>/dev/null || true; fi; }; run_codex_attempt() { local prompt_file=\"\$1\"; local -a codex_args=( $codex_bin_quoted exec --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only --model $model_quoted --config $effort_config_quoted --config \"mcp_servers.vibe_browser.url=\\\"\$mcp_url\\\"\" --config \"mcp_servers.vibe_browser.http_headers.Authorization=\\\"Bearer \$bearer_token\\\"\" --cd $run_dir_quoted --disable shell_tool --disable unified_exec --disable multi_agent --disable image_generation --disable view_image --json --output-last-message $last_message_quoted \"\$(<\"\$prompt_file\")\" ); \"\${codex_args[@]}\" 2>&1 | $output_filter_command | tee -a $log_file_quoted; return \${PIPESTATUS[0]}; }; trap cleanup EXIT INT TERM; $worker_command > $worker_log_quoted 2>&1 & worker_pid=\$!; for readiness_attempt in {1..400}; do if [[ -s $manifest_quoted ]]; then break; fi; if ! kill -0 \"\$worker_pid\" 2>/dev/null; then printf '%s\\n' worker-error > $status_file_quoted; printf '\\nMCP worker exited before readiness. Logs: %s\\n' $worker_log_quoted; read -r; exit 1; fi; sleep 0.05; done; if [[ ! -s $manifest_quoted ]]; then printf '%s\\n' worker-timeout > $status_file_quoted; printf '\\nTimed out waiting for MCP worker manifest. Logs: %s\\n' $worker_log_quoted; read -r; exit 1; fi; mcp_url=\$(sed -n 's/.*\"url\": \"\\([^\"]*\\)\".*/\\1/p' $manifest_quoted); bearer_token=\$(sed -n 's/.*\"bearerToken\": \"\\([^\"]*\\)\".*/\\1/p' $manifest_quoted); if [[ ! \"\$mcp_url\" =~ ^http://(127\\.0\\.0\\.1|localhost):[0-9]+/.+ || ! \"\$bearer_token\" =~ ^[a-f0-9]{64}$ ]]; then printf '%s\\n' worker-manifest-error > $status_file_quoted; printf '\\nCould not read MCP worker manifest.\\n'; read -r; exit 1; fi; printf '\\n%s Browser and MCP worker ready.\\n' \"$run_id\"; attempt=1; run_status=incomplete; codex_status=0; while [[ \"\$attempt\" -le \"$MAX_ATTEMPTS\" ]]; do if [[ \"\$attempt\" -gt 1 ]]; then printf '\\nStarting Codex continuation attempt %s/%s for the existing MCP/browser worker.\\n' \"\$attempt\" \"$MAX_ATTEMPTS\"; fi; if [[ \"\$attempt\" -eq 1 ]]; then run_codex_attempt $initial_prompt_quoted; codex_status=\$?; else run_codex_attempt $continuation_prompt_quoted; codex_status=\$?; fi; if [[ \"\$codex_status\" -ne 0 ]]; then run_status=error; break; elif [[ -f $last_message_quoted ]] && grep -Eqi 'RESULTS_SAVED|Results saved successfully' $last_message_quoted; then run_status=completed; break; elif [[ -f $last_message_quoted ]] && grep -Eqi 'RESULTS_DOWNLOADED|Download trajectories|Download results' $last_message_quoted; then run_status=manual-save; break; else run_status=incomplete; fi; if [[ \"\$attempt\" -lt \"$MAX_ATTEMPTS\" ]]; then attempt=\$((attempt + 1)); else break; fi; done; if [[ \"\$run_status\" == incomplete && \"\$attempt\" -ge \"$MAX_ATTEMPTS\" ]]; then printf '\\nCodex continuation attempts exhausted (%s).\\n' \"$MAX_ATTEMPTS\"; fi; printf '%s\\n' \"\$run_status\" > $status_file_quoted; printf '\\nNative Codex status: %s (exit=%s, attempts=%s). Logs: %s\\n' \"\$run_status\" \"\$codex_status\" \"\$attempt\" $log_file_quoted; read -r"
   local tmux_command
   printf -v tmux_command 'bash -lc %q' "$command_string"
 

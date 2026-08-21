@@ -43,10 +43,12 @@ assert_contains "$signed_in_output" "browser launch: worker"
 assert_contains "$signed_in_output" "scripts/codex-mcp-worker.sh"
 assert_contains "$signed_in_output" "agent-browser-http"
 assert_contains "$signed_in_output" "mcp_servers.vibe_browser.url="
-assert_contains "$signed_in_output" "mcp_servers.vibe_browser.headers.Authorization="
+assert_contains "$signed_in_output" "mcp_servers.vibe_browser.http_headers.Authorization="
+assert_not_contains "$signed_in_output" "mcp_servers.vibe_browser.headers.Authorization="
 assert_contains "$signed_in_output" "http://127.0.0.1:"
 assert_contains "$signed_in_output" "Bearer\\ dry-run-token-A46"
 assert_contains "$signed_in_output" "--disable shell_tool"
+assert_not_contains "$signed_in_output" "eval"
 assert_not_contains "$signed_in_output" "user-data-dir"
 assert_not_contains "$signed_in_output" "codex\\ mcp\\ add"
 assert_not_contains "$signed_in_output" "browser-client.mjs"
@@ -80,7 +82,8 @@ assert_contains "$dry_run_output" "filter-codex-output.mjs"
 assert_not_contains "$dry_run_output" "--enable\\ computer_use"
 assert_contains "$dry_run_output" "scripts/codex-mcp-worker.sh"
 assert_contains "$dry_run_output" "mcp_servers.vibe_browser.url="
-assert_contains "$dry_run_output" "mcp_servers.vibe_browser.headers.Authorization="
+assert_contains "$dry_run_output" "mcp_servers.vibe_browser.http_headers.Authorization="
+assert_not_contains "$dry_run_output" "mcp_servers.vibe_browser.headers.Authorization="
 assert_contains "$dry_run_output" "http://127.0.0.1:44646/mcp"
 assert_contains "$dry_run_output" "http://127.0.0.1:44647/mcp"
 assert_contains "$dry_run_output" "Bearer\\ dry-run-token-A46"
@@ -91,6 +94,7 @@ assert_not_contains "$dry_run_output" "browser-client.mjs"
 assert_not_contains "$dry_run_output" "Chrome control"
 assert_not_contains "$dry_run_output" "user-data-dir"
 assert_not_contains "$dry_run_output" "codex\\ mcp\\ add"
+assert_not_contains "$dry_run_output" "eval"
 
 custom_attempts_output="$($SCRIPT --dry-run \
   --task visual-similarity \
@@ -120,6 +124,13 @@ assert_contains "$parallel_default_output" "http://127.0.0.1:44642/mcp"
 if "$SCRIPT" --dry-run --host "https://example.test/path" \
   --task visual-similarity --model gpt-5.6-luna --id 41 >/dev/null 2>&1; then
   echo "Expected host paths to be rejected" >&2
+  exit 1
+fi
+
+if "$SCRIPT" --dry-run --task visual-similarity \
+  --model gpt-5.6-luna --id 41 \
+  --runs-dir "/tmp/codex-runs; touch /tmp/codex-injected" >/dev/null 2>&1; then
+  echo "Expected hostile runs-dir to be rejected" >&2
   exit 1
 fi
 
