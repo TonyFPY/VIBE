@@ -67,6 +67,9 @@ export class VisualBrowserToolset {
     this.hasObserved = false;
     this.requiresObservation = true;
     this.pendingMoves = [];
+    this.lastPointerSequenceSignature = undefined;
+    this.repeatedPointerSequenceCount = 0;
+    this.abortedReason = undefined;
   }
 
   async observe(): Promise<Uint8Array> {

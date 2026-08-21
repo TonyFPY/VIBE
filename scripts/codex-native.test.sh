@@ -124,6 +124,16 @@ if ! should_retry_codex_attempt 0 "$raw_log_file" "$last_message_file" "$events_
   exit 1
 fi
 
+printf '{"type":"action-rejected","actionType":"click","error":"Fresh visible observation required before pointer input"}\n' > "$events_file"
+printf '{"type":"observation","screenshotId":"observation-000001"}\n' >> "$events_file"
+printf 'fatal config error\n' > "$raw_log_file"
+printf 'stopped\n' > "$last_message_file"
+attempt_event_start=2
+if should_retry_codex_attempt 1 "$raw_log_file" "$last_message_file" "$events_file" "$attempt_event_start"; then
+  echo "Expected stale worker retry markers from earlier attempts to be ignored" >&2
+  exit 1
+fi
+
 printf 'fatal config error\n' > "$raw_log_file"
 printf 'stopped\n' > "$last_message_file"
 printf '{"type":"observation","screenshotId":"observation-000001"}\n' > "$events_file"

@@ -41,8 +41,16 @@ raw_log_has_retryable_transport() {
 
 worker_events_have_retryable_refresh_trigger() {
   local events_file="$1"
+  local start_line="${2:-1}"
   [[ -f "$events_file" ]] || return 1
-  grep -Eq '"type"[[:space:]]*:[[:space:]]*"action-rejected"|"type"[[:space:]]*:[[:space:]]*"run-aborted"' "$events_file"
+  awk -v start_line="$start_line" '
+    NR < start_line { next }
+    /"type"[[:space:]]*:[[:space:]]*"action-rejected"|"type"[[:space:]]*:[[:space:]]*"run-aborted"/ {
+      found = 1
+      exit
+    }
+    END { exit(found ? 0 : 1) }
+  ' "$events_file"
 }
 
 attempt_marked_incomplete() {
@@ -56,6 +64,7 @@ should_retry_codex_attempt() {
   local raw_log_file="$2"
   local last_message="$3"
   local events_file="${4:-}"
+  local events_start_line="${5:-1}"
 
   if attempt_marked_incomplete "$last_message"; then
     return 0
@@ -65,7 +74,7 @@ should_retry_codex_attempt() {
     return 0
   fi
 
-  if [[ -n "$events_file" ]] && worker_events_have_retryable_refresh_trigger "$events_file"; then
+  if [[ -n "$events_file" ]] && worker_events_have_retryable_refresh_trigger "$events_file" "$events_start_line"; then
     return 0
   fi
 

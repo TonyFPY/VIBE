@@ -292,6 +292,58 @@ describe("VisualBrowserToolset MCP surface", () => {
     }));
   });
 
+  it("clears repeated-pointer abort state for a fresh MCP session without reopening the browser", async () => {
+    const fixture = await createFixture();
+    const runSequence = async () => {
+      await fixture.client.callTool({ name: "observe", arguments: {} });
+      for (const [x, y] of [[100, 100], [200, 200], [300, 300]] as const) {
+        await fixture.client.callTool({ name: "move", arguments: { type: "move", x, y } });
+      }
+      return fixture.client.callTool({
+        name: "click",
+        arguments: { type: "click", x: 400, y: 400 },
+      });
+    };
+
+    expect((await runSequence()).isError).not.toBe(true);
+    expect((await runSequence()).isError).not.toBe(true);
+    expect((await runSequence()).isError).toBe(true);
+
+    fixture.toolset.beginMcpSession();
+    await fixture.client.callTool({ name: "observe", arguments: {} });
+    const recoveredMove = await fixture.client.callTool({
+      name: "move",
+      arguments: { type: "move", x: 30, y: 40 },
+    });
+    const recoveredClick = await fixture.client.callTool({
+      name: "click",
+      arguments: { type: "click", x: 50, y: 60 },
+    });
+
+    expect(recoveredMove.isError).not.toBe(true);
+    expect(recoveredClick.isError).not.toBe(true);
+    expect(fixture.host.openedUrls).toEqual([config.url]);
+    expect(fixture.host.session.actions).toEqual([
+      ["screenshot", 90],
+      ["move", 100, 100],
+      ["move", 200, 200],
+      ["move", 300, 300],
+      ["click", 400, 400],
+      ["screenshot", 90],
+      ["move", 100, 100],
+      ["move", 200, 200],
+      ["move", 300, 300],
+      ["click", 400, 400],
+      ["screenshot", 90],
+      ["move", 100, 100],
+      ["move", 200, 200],
+      ["move", 300, 300],
+      ["screenshot", 90],
+      ["move", 30, 40],
+      ["click", 50, 60],
+    ]);
+  });
+
   it("rejects and logs invalid actions without clamping or executing them", async () => {
     const fixture = await createFixture();
     const result = await fixture.client.callTool({
