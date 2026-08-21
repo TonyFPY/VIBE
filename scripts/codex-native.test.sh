@@ -59,8 +59,19 @@ assert_contains "$dry_run_output" "CODEX_ATTEMPT="
 assert_contains "$dry_run_output" "continuation"
 assert_contains "$dry_run_output" "object-matching"
 assert_contains "$dry_run_output" "attempt-001/terminal.log"
+assert_contains "$dry_run_output" "attempt-002/terminal.log"
+assert_contains "$dry_run_output" "attempt-001/codex.jsonl"
+assert_contains "$dry_run_output" "attempt-002/codex.jsonl"
+assert_contains "$dry_run_output" "attempt-001/last-message.txt"
+assert_contains "$dry_run_output" "attempt-002/last-message.txt"
+assert_contains "$dry_run_output" "prompt-public.txt"
+assert_contains "$dry_run_output" "prompt-attempt-001.txt"
+assert_contains "$dry_run_output" "prompt-attempt-002.txt"
+assert_contains "$dry_run_output" "events.jsonl"
+assert_contains "$dry_run_output" "worker.log"
 assert_contains "$dry_run_output" "status.txt values: RESULTS_SAVED | RESULTS_DOWNLOADED | INCOMPLETE"
 assert_contains "$dry_run_output" "status line prefixes: [A<ID>] and [A<ID> attempt N]"
+assert_contains "$dry_run_output" "continuation instruction: Reconnect to the existing MCP browser worker; call observe before any pointer input; reuse the same public task instruction."
 assert_not_contains "$dry_run_output" "mcp_servers.vibe_browser.headers.Authorization"
 assert_not_contains "$dry_run_output" "built-in\\ Chrome\\ browser\\ control"
 assert_not_contains "$dry_run_output" "browser-client.mjs"
@@ -104,6 +115,9 @@ if should_retry_codex_attempt 1 "$raw_log_file" "$last_message_file"; then
   echo "Expected hard Codex failures without retry markers to stop" >&2
   exit 1
 fi
+
+assert_contains "$(status_prefix A46)" "[A46]"
+assert_contains "$(attempt_prefix A46 2)" "[A46 attempt 2]"
 
 custom_attempts_output="$($SCRIPT --dry-run \
   --task visual-similarity \

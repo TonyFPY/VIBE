@@ -71,6 +71,23 @@ At completion, `run=dev` sessions automatically submit to the same-origin
 `VITE_RESULTS_ENDPOINT` when configured; otherwise the completion screen keeps browser recovery data and
 offers separate downloads for results and trajectories.
 
+For local Codex MCP launcher runs, the public command stays:
+
+```bash
+scripts/codex.sh --task <task> --model <model1> [model2 ...] --id <id1> [id2 ...]
+```
+
+That wrapper delegates to the persistent Playwright MCP launcher without
+changing the CLI shape. It starts one browser worker per participant ID, keeps
+that worker alive across Codex continuation attempts, and reuses the same
+visible experiment tab when a turn resumes after `INCOMPLETE`. Human-readable
+terminal output is prefixed with `[A<ID>]` and `[A<ID> attempt N]`, while the
+raw JSONL stream is still preserved under `runs/<session>/A<ID>/attempt-00N/`.
+Use `--max-attempts N` to cap fresh-context continuation turns from `1` to `10`
+instead of the default `5`. See [scripts/run.md](scripts/run.md) for concrete
+examples and [agent_harness/README.md](agent_harness/README.md) for the full
+artifact layout.
+
 ### Codex chat development prompts
 
 Use these prompts in a fresh Codex chat for an exploratory, headed local run.

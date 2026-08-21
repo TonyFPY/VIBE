@@ -129,6 +129,82 @@ by default. Override that location with:
 export AGENT_RUNS_DIR=/absolute/path/to/private-runs
 ```
 
+## Codex CLI batch runner
+
+Codex experiments keep the existing public launcher command and route it to the
+native persistent Playwright MCP worker path:
+
+```bash
+scripts/codex.sh \
+  --task object-matching \
+  --model gpt-5.6-luna \
+  --id 46 \
+  --effort medium
+```
+
+The unchanged launcher command stays `scripts/codex.sh ...`; the wrapper
+delegates to `scripts/codex-native.sh` without changing flag order or argument
+shape. Run `--dry-run` first to inspect the per-run URL, worker manifest,
+worker command, and Codex command. Each participant ID gets exactly one
+persistent Playwright MCP worker plus one browser session, and continuation
+attempts reconnect to that same worker instead of spawning a second browser or
+controller for the same ID. Each run gets its own directory under `runs/`, and
+each continuation attempt gets its own `attempt-00N/` subdirectory containing:
+
+- `codex.jsonl` for the unformatted raw Codex JSONL stream
+- `terminal.log` for the readable formatted terminal output
+- `last-message.txt` for Codex's final message from that attempt
+- `prompt-attempt-00N.txt` for the exact attempt prompt
+
+The run root also keeps `prompt-public.txt`, `events.jsonl`, `worker.log`,
+`mcp-connection.json`, and `status.txt`. Attach to the tmux session with the
+command printed by the launcher; stop the whole batch with
+`tmux kill-session -t <name>`.
+
+Each run allows five Codex turns by default. If a turn ends with `INCOMPLETE`
+before the visible save screen, the launcher starts a fresh continuation turn
+and resumes the existing experiment tab instead of restarting the task or
+launching a second worker for that ID. The continuation prompt explicitly tells
+Codex to reconnect to the existing MCP browser worker, call `observe` before
+any pointer input, and continue from the newest screenshot with fresh model
+context. Override this with `--max-attempts N` (1–10). A non-zero Codex
+process error stops that run and leaves its tmux window open for inspection.
+
+The launcher keeps readable terminal output separate from the raw Codex event
+stream. `attempt-00N/terminal.log` stores the formatted status/model/tool
+lines shown live in tmux, while `attempt-00N/codex.jsonl` preserves the raw
+Codex JSONL stream for later inspection. Large image `data` fields are omitted
+from the readable output, but agent messages, tool names, coordinates, errors,
+statuses, and usage remain visible.
+
+The launcher passes the MCP URL and bearer token inline to each fresh
+`codex exec` attempt. It does not call `codex mcp add`, does not modify global
+Codex configuration, and does not rely on Chrome-plugin bootstrap, raw CDP,
+or direct Playwright access from the model. The tmux windows show formatted
+execution logs rather than the interactive Codex TUI.
+
+The old `--headed` option remains accepted for command compatibility but has
+no effect because these runs are always headed. Multiple Codex Chrome-control
+processes can compete for the same desktop pointer and focus. Use separate
+participant IDs and explicit isolated worker requests when you need parallel
+local runs.
+
+The readable terminal stream keeps model/status lines concise:
+
+- session summaries use `[A<ID>]`
+- attempt lines use `[A<ID> attempt N]`
+- successful completion resolves to `RESULTS_SAVED` or `RESULTS_DOWNLOADED`
+- exhausted or failed runs resolve to `INCOMPLETE`
+
+Use the formatted terminal stream for live monitoring and `codex.jsonl` when
+you need the raw event log.
+
+Codex `agent_message` items are not guaranteed to occur once per trial. They
+are model-generated progress text, so both tasks currently use the same
+general messages (initial instructions, optional progress, and final status).
+Use `events.jsonl` and the saved response records for reliable trial-level
+logging; do not infer trial completion from an `agent_message`.
+
 ## Gemini custom action-batch loop
 
 Each provider turn contains only the public participant instruction, the
