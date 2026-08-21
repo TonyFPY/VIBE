@@ -96,14 +96,19 @@ afterEach(async () => {
   while (handles.length > 0) await handles.pop()!.close();
 });
 
-async function connectClient(url: string, bearerToken: string): Promise<Client> {
+interface ConnectedClient {
+  client: Client;
+  transport: StreamableHTTPClientTransport;
+}
+
+async function connectClient(url: string, bearerToken: string): Promise<ConnectedClient> {
   const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
   const transport = new StreamableHTTPClientTransport(new URL(url), {
     requestInit: { headers: { Authorization: "Bearer " + bearerToken } },
   });
   await client.connect(transport);
   clients.push(client);
-  return client;
+  return { client, transport };
 }
 
 async function postJson(url: string, token?: string): Promise<Response> {
@@ -127,7 +132,7 @@ async function postJson(url: string, token?: string): Promise<Response> {
 }
 
 describe("startAgentBrowserHttpServer", () => {
-  it("listens on loopback and rejects invalid path, token, and method", async () => {
+  it("listens on loopback and rejects invalid path, token, and unsupported methods", async () => {
     const host = new FakeHost();
     const logger = new FakeLogger();
     const handle = await startAgentBrowserHttpServer(environment, factoriesFor(host, logger));
@@ -146,27 +151,40 @@ describe("startAgentBrowserHttpServer", () => {
     expect(invalidPath.status).toBe(404);
 
     const invalidMethod = await fetch(handle.url, {
-      method: "GET",
+      method: "PUT",
       headers: { Authorization: "Bearer test-bearer-token" },
     });
     expect(invalidMethod.status).toBe(405);
   });
 
-  it("reconnects fresh MCP clients to the same toolset and browser session", async () => {
+  it("terminates a stale MCP session before reconnecting a fresh client to the same toolset", async () => {
     const host = new FakeHost();
     const logger = new FakeLogger();
     const handle = await startAgentBrowserHttpServer(environment, factoriesFor(host, logger));
     handles.push(handle);
 
     const clientA = await connectClient(handle.url, "test-bearer-token");
-    const observeA = await clientA.callTool({ name: "observe", arguments: {} });
+    const observeA = await clientA.client.callTool({ name: "observe", arguments: {} });
     expect(observeA.isError).not.toBe(true);
+    const staleSessionId = clientA.transport.sessionId;
+    expect(staleSessionId).toBeTruthy();
 
-    await clientA.close();
+    await clientA.transport.terminateSession();
+    await clientA.client.close();
     clients.pop();
 
+    const staleSessionRequest = await fetch(handle.url, {
+      method: "GET",
+      headers: {
+        Authorization: "Bearer test-bearer-token",
+        Accept: "text/event-stream",
+        "Mcp-Session-Id": staleSessionId!,
+      },
+    });
+    expect(staleSessionRequest.status).toBe(404);
+
     const clientB = await connectClient(handle.url, "test-bearer-token");
-    const observeB = await clientB.callTool({ name: "observe", arguments: {} });
+    const observeB = await clientB.client.callTool({ name: "observe", arguments: {} });
     expect(observeB.isError).not.toBe(true);
 
     expect(host.openedUrls).toEqual([environment.AGENT_BROWSER_URL]);
@@ -185,7 +203,7 @@ describe("startAgentBrowserHttpServer", () => {
     handles.push(handle);
 
     const client = await connectClient(handle.url, "test-bearer-token");
-    await client.callTool({ name: "observe", arguments: {} });
+    await client.client.callTool({ name: "observe", arguments: {} });
 
     await handle.close();
 

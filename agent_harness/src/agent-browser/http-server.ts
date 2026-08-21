@@ -23,6 +23,7 @@ export interface AgentBrowserHttpHandle {
 interface SessionHandle {
   readonly transport: StreamableHTTPServerTransport;
   readonly server: ReturnType<typeof createVisualBrowserMcpServer>;
+  closed: boolean;
   close(): Promise<void>;
 }
 
@@ -136,7 +137,7 @@ export async function startAgentBrowserHttpServer(
   const port = parsePort(environment);
   const path = parsePath(environment);
   const bearerToken = requiredEnvironment(environment, "AGENT_BROWSER_BEARER_TOKEN");
-  const { config, toolset } = await createAgentBrowserToolset(environment, factories);
+  const { toolset } = await createAgentBrowserToolset(environment, factories);
 
   const sessions = new Map<string, SessionHandle>();
   const allSessions = new Set<SessionHandle>();
@@ -151,20 +152,21 @@ export async function startAgentBrowserHttpServer(
     const session: SessionHandle = {
       transport,
       server,
+      closed: false,
       close: async () => {
+        if (session.closed) return;
+        session.closed = true;
         try {
           await server.close();
         } finally {
-          allSessions.delete(session);
           const sessionId = transport.sessionId;
           if (sessionId) sessions.delete(sessionId);
+          allSessions.delete(session);
         }
       },
     };
     transport.onclose = () => {
-      const sessionId = transport.sessionId;
-      if (sessionId) sessions.delete(sessionId);
-      allSessions.delete(session);
+      void session.close();
     };
     await server.connect(transport);
     allSessions.add(session);
@@ -182,12 +184,12 @@ export async function startAgentBrowserHttpServer(
         unauthorized(response);
         return;
       }
-      if (request.method !== "POST") {
+      if (request.method !== "GET" && request.method !== "POST" && request.method !== "DELETE") {
         methodNotAllowed(response);
         return;
       }
 
-      const parsedBody = await readJsonBody(request);
+      const parsedBody = request.method === "POST" ? await readJsonBody(request) : undefined;
       const sessionId = normalizeSessionId(request.headers["mcp-session-id"]);
       let session = sessionId ? sessions.get(sessionId) : undefined;
       if (!session) {
@@ -195,7 +197,7 @@ export async function startAgentBrowserHttpServer(
           notFound(response);
           return;
         }
-        if (!isInitializeRequest(parsedBody)) {
+        if (request.method !== "POST" || !isInitializeRequest(parsedBody)) {
           badRequest(response);
           return;
         }
