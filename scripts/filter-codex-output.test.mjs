@@ -29,11 +29,29 @@ test("formats readable model text and unknown events for terminal output", () =>
 });
 
 test("normalizes non-json output and truncates it for terminal display", () => {
-  const line = `codex diagnostic ${"x".repeat(500)}`;
+  const line = `codex diagnostic ${"-".repeat(500)}`;
   const formatted = formatCodexLine(line, { runId: "A46", attempt: 2 });
-  assert.match(formatted, /^\[A46 attempt 2\] codex diagnostic x+/);
+  assert.match(formatted, /^\[A46 attempt 2\] codex diagnostic -+/);
   assert.ok(formatted.endsWith("…"));
   assert.ok(formatted.length < 360);
+});
+
+test("sanitizes payload-like non-json output before printing it", () => {
+  assert.equal(
+    formatCodexLine(
+      "stderr data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      { runId: "A46", attempt: 2 },
+    ),
+    "[A46 attempt 2] stderr [omitted data-uri payload]",
+  );
+
+  assert.equal(
+    formatCodexLine(
+      "stderr data=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ++++////",
+      { runId: "A46", attempt: 2 },
+    ),
+    "[A46 attempt 2] payload-like output omitted",
+  );
 });
 
 test("writes raw jsonl separately while printing only filtered text", async () => {

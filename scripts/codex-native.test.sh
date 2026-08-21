@@ -3,6 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SCRIPT="$SCRIPT_DIR/codex-native.sh"
+LIB="$SCRIPT_DIR/codex-native-lib.sh"
+
+source "$LIB"
 
 assert_contains() {
   local haystack="$1"
@@ -56,6 +59,8 @@ assert_contains "$dry_run_output" "CODEX_ATTEMPT="
 assert_contains "$dry_run_output" "continuation"
 assert_contains "$dry_run_output" "object-matching"
 assert_contains "$dry_run_output" "attempt-001/terminal.log"
+assert_contains "$dry_run_output" "status.txt values: RESULTS_SAVED | RESULTS_DOWNLOADED | INCOMPLETE"
+assert_contains "$dry_run_output" "status line prefixes: [A<ID>] and [A<ID> attempt N]"
 assert_not_contains "$dry_run_output" "mcp_servers.vibe_browser.headers.Authorization"
 assert_not_contains "$dry_run_output" "built-in\\ Chrome\\ browser\\ control"
 assert_not_contains "$dry_run_output" "browser-client.mjs"
@@ -65,6 +70,40 @@ assert_not_contains "$dry_run_output" "user-data-dir"
 assert_not_contains "$dry_run_output" "enable\\ computer_use"
 assert_not_contains "$dry_run_output" "codex\\ mcp\\ add"
 assert_not_contains "$dry_run_output" "eval"
+
+temp_root="$(mktemp -d)"
+trap 'rm -rf "$temp_root"' EXIT
+events_file="$temp_root/events.jsonl"
+last_message_file="$temp_root/last-message.txt"
+raw_log_file="$temp_root/codex.jsonl"
+
+printf '{"type":"backend-event","status":200,"ok":true}\n' > "$events_file"
+assert_contains "$(terminal_status_from_artifacts "$events_file" "$last_message_file")" "RESULTS_SAVED"
+
+: > "$events_file"
+printf 'Download trajectories\n' > "$last_message_file"
+assert_contains "$(terminal_status_from_artifacts "$events_file" "$last_message_file")" "RESULTS_DOWNLOADED"
+
+printf 'INCOMPLETE: model stopped before completion\n' > "$last_message_file"
+: > "$raw_log_file"
+if ! should_retry_codex_attempt 0 "$raw_log_file" "$last_message_file"; then
+  echo "Expected INCOMPLETE marker to be retryable" >&2
+  exit 1
+fi
+
+printf 'transport disconnected unexpectedly\n' > "$raw_log_file"
+: > "$last_message_file"
+if ! should_retry_codex_attempt 1 "$raw_log_file" "$last_message_file"; then
+  echo "Expected transport failure to be retryable" >&2
+  exit 1
+fi
+
+printf 'fatal config error\n' > "$raw_log_file"
+printf 'stopped\n' > "$last_message_file"
+if should_retry_codex_attempt 1 "$raw_log_file" "$last_message_file"; then
+  echo "Expected hard Codex failures without retry markers to stop" >&2
+  exit 1
+fi
 
 custom_attempts_output="$($SCRIPT --dry-run \
   --task visual-similarity \

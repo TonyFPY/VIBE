@@ -137,3 +137,55 @@ This confirms the display path does not print image/base64 payloads.
 ## Concerns
 
 - The formatter currently summarizes the Codex event shapes observed in this repository and nearby run logs. If the CLI introduces materially different event schemas later, unknown events will degrade to concise `event <type>` lines rather than failing, but may need future formatting expansion.
+
+---
+
+## Fix Round 1
+
+Addressed the three review findings without touching Gemini Computer Use SDK/provider files.
+
+### Fixes
+
+- `scripts/filter-codex-output.mjs`
+  - Sanitizes non-JSON fallback lines before terminal display.
+  - Replaces `data:` URIs and long base64 spans with omission markers.
+  - Suppresses generic payload-like `data=` / `data:` fallback lines instead of echoing raw payload text.
+
+- `scripts/codex-native.sh`
+  - Moved terminal-status and retry classification into a shared helper library.
+  - Retries only when the run is explicitly recoverable: `INCOMPLETE` marker or retryable MCP transport failure.
+  - Stops immediately on hard nonzero Codex exits without recoverable markers.
+  - Uses explicit terminal/status markers: `RESULTS_SAVED`, `RESULTS_DOWNLOADED`, `INCOMPLETE`.
+  - Uses readable bracketed launcher prefixes in real runtime status lines: `[A<ID>]` and `[A<ID> attempt N]`.
+
+- `scripts/codex-native-lib.sh`
+  - Added focused shell helpers for:
+    - `terminal_status_from_artifacts`
+    - `raw_log_has_retryable_transport`
+    - `attempt_marked_incomplete`
+    - `should_retry_codex_attempt`
+
+### Added Tests
+
+- `scripts/filter-codex-output.test.mjs`
+  - verifies `data:` URI redaction
+  - verifies generic payload-like fallback suppression
+
+- `scripts/codex-native.test.sh`
+  - verifies explicit dry-run status marker strings
+  - verifies helper classification of `RESULTS_SAVED`
+  - verifies helper classification of `RESULTS_DOWNLOADED`
+  - verifies retry on `INCOMPLETE`
+  - verifies retry on transport failure
+  - verifies hard nonzero Codex failure does not retry
+
+### Commands Run
+
+```bash
+node --test scripts/filter-codex-output.test.mjs scripts/format-codex-event.test.mjs
+bash scripts/codex-native.test.sh
+```
+
+### Concerns
+
+- Retry classification is intentionally conservative now: only explicit `INCOMPLETE` messages and transport-failure signatures trigger a continuation. If Codex later introduces another recoverable end-state, it will stop safely rather than retrying blindly until that new marker is added deliberately.
