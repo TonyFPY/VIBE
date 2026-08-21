@@ -1,1 +1,0 @@
-INCOMPLETE: vibe_browser MCP server unavailable because tool calls require approval under a `never` approval policy.

@@ -1,1 +1,0 @@
-INCOMPLETE: vibe_browser MCP requires approval, but the current approval policy is `never`, so I cannot observe or interact with the experiment.

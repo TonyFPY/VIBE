@@ -1,7 +1,0 @@
-{"type":"thread.started","thread_id":"01a025b5-b735-7e01-89b6-f0d0439944f1"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’m reconnecting to the existing browser worker and will first inspect the current visible screen, then continue strictly through the `vibe_browser` tools only."}}
-{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":null,"status":"in_progress"}}
-{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":{"message":"MCP tool call requires approval, but approval policy is never"},"status":"failed"}}
-{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"INCOMPLETE: vibe_browser MCP server unavailable because tool calls require approval under a `never` approval policy."}}
-{"type":"turn.completed","usage":{"input_tokens":46230,"cached_input_tokens":31872,"cache_write_input_tokens":0,"output_tokens":201,"reasoning_output_tokens":82}}

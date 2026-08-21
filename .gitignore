@@ -31,6 +31,7 @@ Thumbs.db
 skills-lock.json
 .superpowers/
 .worktrees/
+/runs/
 
 # Ignore all original source-dataset files. Deployable subsets remain tracked.
 data/dreamsim/

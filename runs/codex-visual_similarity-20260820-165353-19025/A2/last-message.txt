@@ -1,1 +1,0 @@
-I’m blocked: the visual browser’s `observe` call requires approval, but this session’s policy forbids approvals. I can’t access or complete the experiment without it.

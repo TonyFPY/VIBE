@@ -1,1 +1,0 @@
-INCOMPLETE: vibe_browser stopped the run after detecting a repeated pointer sequence.

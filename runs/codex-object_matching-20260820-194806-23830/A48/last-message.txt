@@ -1,1 +1,0 @@
-Experiment completed. Results and trajectories were saved successfully via the API.

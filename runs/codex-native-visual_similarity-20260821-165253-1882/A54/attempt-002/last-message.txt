@@ -1,1 +1,0 @@
-INCOMPLETE: repeated pointer sequence detected

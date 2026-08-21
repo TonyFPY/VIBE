@@ -1,7 +1,0 @@
-{"type":"thread.started","thread_id":"01a025b6-27c8-7221-800a-c76bd0efa099"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Resuming the existing browser worker from its current state. I’m locating the `vibe_browser` tools first, then I’ll observe before any pointer input and continue strictly from the visible screen."}}
-{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":null,"status":"in_progress"}}
-{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"vibe_browser","tool":"observe","arguments":{},"result":null,"error":{"message":"MCP tool call requires approval, but approval policy is never"},"status":"failed"}}
-{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"INCOMPLETE: `vibe_browser` MCP tools are not usable in this session because tool calls require approval while the approval policy is `never`."}}
-{"type":"turn.completed","usage":{"input_tokens":46340,"cached_input_tokens":31872,"cache_write_input_tokens":0,"output_tokens":290,"reasoning_output_tokens":155}}

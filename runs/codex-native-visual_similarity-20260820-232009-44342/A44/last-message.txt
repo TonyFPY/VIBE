@@ -1,1 +1,0 @@
-INCOMPLETE: Chrome runtime binding was cleared before completion, and the required bootstrap may only be run once.

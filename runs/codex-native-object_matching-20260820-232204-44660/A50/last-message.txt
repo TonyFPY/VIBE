@@ -1,1 +1,0 @@
-INCOMPLETE: reached visible screen `Testing 27 / 100` and could not finish the remaining trials within this turn.

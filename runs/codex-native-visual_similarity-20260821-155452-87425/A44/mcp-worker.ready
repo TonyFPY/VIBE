@@ -1,5 +1,0 @@
-
-> agent-browser-http
-> tsx src/agent-browser/http-server-main.ts
-
-http://127.0.0.1:59157/mcp

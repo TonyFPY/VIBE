@@ -1,4 +1,0 @@
-{"type":"thread.started","thread_id":"01a0222c-edd6-72a0-922f-80f6f2bd929f"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"INCOMPLETE: I don’t have access to a native computer-use/browser-control tool in this session, so I can’t interact with the already-open Chrome window visibly."}}
-{"type":"turn.completed","usage":{"input_tokens":12507,"cached_input_tokens":7552,"cache_write_input_tokens":0,"output_tokens":90,"reasoning_output_tokens":50}}
