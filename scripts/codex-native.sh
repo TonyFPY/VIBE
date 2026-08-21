@@ -289,28 +289,15 @@ prepare_run_directories() {
   done
 }
 
-build_prompt() {
+build_public_prompt() {
   local url="$1"
-  local attempt="${2:-1}"
-  local browser_start_instruction
-  local experiment_start_rule
-  if [[ "$attempt" -gt 1 ]]; then
-    browser_start_instruction="This is a continuation attempt after a previous Codex turn stopped before completion. Reconnect to the configured MCP server, observe the current visible page, and resume the matching experiment tab for the participant URL above. Do not restart the experiment or navigate to another URL."
-    experiment_start_rule="Do not click Start or restart the experiment. Resume from the current visible state; click Continue only if it is the current next control in the existing flow."
-  else
-    browser_start_instruction="The launcher started a persistent Playwright browser worker at the participant URL above. Use the configured MCP server to observe the current screen before acting."
-    experiment_start_rule="Click Start and Continue normally."
-  fi
   cat <<PROMPT
 Use the configured vibe_browser MCP server to complete this experiment through screenshots and pointer actions only:
 $url
 
-$browser_start_instruction
-
 Use only the MCP tools exposed by vibe_browser: observe, move, click, and wait. Do not use Playwright directly, chromium.connectOverCDP, raw CDP, DevTools, shell commands, DOM inspection, accessibility data, source code, files, network requests, task configuration, hidden state, OCR/helper tools, or fallback attachment paths. If the vibe_browser MCP server is unavailable, report INCOMPLETE immediately; do not try another browser-control mechanism.
 
 Rules:
-- $experiment_start_rule
 - For every trial, click the visible fixation marker (+) first.
 - For every testing trial, after clicking the cross, move the cursor toward the chosen response image through multiple small visible movements, then click the image.
 - Do not jump directly from the fixation marker to a candidate with one direct click.
@@ -331,6 +318,33 @@ Only after the visible end state, report one of:
 PROMPT
 }
 
+build_attempt_suffix() {
+  local attempt="${2:-1}"
+  local browser_start_instruction
+  local experiment_start_rule
+  if [[ "$attempt" -gt 1 ]]; then
+    browser_start_instruction="This is continuation attempt $attempt after a previous Codex context stopped before completion. Reconnect to the existing MCP browser worker and existing experiment page. Do not restart, do not navigate, and do not click Start unless it is visibly still the current page. First call observe before any pointer input, reassess from the newest screenshot, and continue using the same public task instruction above."
+    experiment_start_rule="Do not click Start or restart the experiment. Resume from the current visible state; click Continue only if it is the current next control in the existing flow."
+  else
+    browser_start_instruction="The launcher started a persistent Playwright browser worker at the participant URL above. Use the configured MCP server to observe the current screen before acting."
+    experiment_start_rule="Click Start and Continue normally."
+  fi
+  cat <<PROMPT
+$browser_start_instruction
+
+Attempt-specific start rule:
+- $experiment_start_rule
+PROMPT
+}
+
+build_prompt() {
+  local url="$1"
+  local attempt="${2:-1}"
+  build_public_prompt "$url"
+  printf '\nContinuation / attempt instructions:\n'
+  build_attempt_suffix "$url" "$attempt"
+}
+
 build_codex_command() {
   local url="$1"
   local model="$2"
@@ -338,6 +352,8 @@ build_codex_command() {
   local mcp_url="$4"
   local bearer_token="$5"
   local attempt="${6:-1}"
+  local attempt_label
+  printf -v attempt_label 'attempt-%03d' "$attempt"
   local prompt
   prompt="$(build_prompt "$url" "$attempt")"
 
@@ -359,7 +375,7 @@ build_codex_command() {
     --disable image_generation
     --disable view_image
     --json
-    --output-last-message "$run_dir/last-message.txt"
+    --output-last-message "$run_dir/$attempt_label/last-message.txt"
     "$prompt"
   )
   printf '%q ' "${codex_args[@]}"
@@ -379,6 +395,11 @@ is_headed_run() {
 dry_run_port_for_id() {
   local participant_id="$1"
   echo $((44600 + 10#$participant_id))
+}
+
+attempt_label() {
+  local attempt="$1"
+  printf 'attempt-%03d' "$attempt"
 }
 
 build_worker_command() {
@@ -424,55 +445,61 @@ print_run() {
   echo "  worker entrypoint: npm --prefix agent_harness run agent-browser-http"
   echo "  worker env: AGENT_BROWSER_HEADLESS=$headless"
 
-  local initial_codex_template
-  initial_codex_template="$(build_codex_command "$url" "$model" "$run_dir" "__MCP_URL__" "__MCP_TOKEN__" 1)"
-  local continuation_codex_template
-  continuation_codex_template="$(build_codex_command "$url" "$model" "$run_dir" "__MCP_URL__" "__MCP_TOKEN__" 2)"
   local dry_initial_codex_command
   dry_initial_codex_command="$(build_codex_command "$url" "$model" "$run_dir" "$dry_mcp_url" "$dry_bearer_token" 1)"
   local worker_command
   worker_command="$(build_worker_command "$url" "$run_id" "$run_dir" "$manifest" "$headless" 0)"
   local dry_worker_command
   dry_worker_command="$(build_worker_command "$url" "$run_id" "$run_dir" "$manifest" "$headless" "$(dry_run_port_for_id "$participant_id")")"
-  local log_file_quoted
-  printf -v log_file_quoted '%q' "$run_dir/codex.jsonl"
-  local last_message_quoted
-  printf -v last_message_quoted '%q' "$run_dir/last-message.txt"
   local status_file_quoted
   printf -v status_file_quoted '%q' "$run_dir/status.txt"
+  local public_prompt_file="$run_dir/prompt-public.txt"
+  local public_prompt_quoted
+  printf -v public_prompt_quoted '%q' "$public_prompt_file"
   local manifest_quoted
   printf -v manifest_quoted '%q' "$manifest"
   local worker_log_quoted
   printf -v worker_log_quoted '%q' "$run_dir/worker.log"
+  local events_file_quoted
+  printf -v events_file_quoted '%q' "$run_dir/events.jsonl"
   local run_dir_quoted
   printf -v run_dir_quoted '%q' "$run_dir"
+  local runs_dir_quoted
+  printf -v runs_dir_quoted '%q' "$RUNS_DIR"
   local model_quoted
   printf -v model_quoted '%q' "$model"
   local codex_bin_quoted
   printf -v codex_bin_quoted '%q' "$CODEX_BIN"
   local effort_config_quoted
   printf -v effort_config_quoted '%q' "model_reasoning_effort=$(toml_quote "$EFFORT")"
-  local initial_prompt_file="$run_dir/prompt-initial.txt"
-  local continuation_prompt_file="$run_dir/prompt-continuation.txt"
-  local initial_prompt_quoted
-  printf -v initial_prompt_quoted '%q' "$initial_prompt_file"
-  local continuation_prompt_quoted
-  printf -v continuation_prompt_quoted '%q' "$continuation_prompt_file"
   if [[ "$DRY_RUN" -eq 0 ]]; then
-    build_prompt "$url" 1 > "$initial_prompt_file"
-    build_prompt "$url" 2 > "$continuation_prompt_file"
-    chmod 600 "$initial_prompt_file" "$continuation_prompt_file"
+    build_public_prompt "$url" > "$public_prompt_file"
+    chmod 600 "$public_prompt_file"
+    for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1)); do
+      local label
+      label="$(attempt_label "$attempt")"
+      local attempt_dir="$run_dir/$label"
+      local attempt_prompt_file="$attempt_dir/prompt-$label.txt"
+      mkdir -p "$attempt_dir"
+      build_prompt "$url" "$attempt" > "$attempt_prompt_file"
+      chmod 700 "$attempt_dir"
+      chmod 600 "$attempt_prompt_file"
+    done
   fi
   local output_filter_command
   printf -v output_filter_command '%q %q' "$NODE_BIN" "$CODEX_OUTPUT_FILTER"
 
   local command_string
-  command_string="set -uo pipefail; cleanup() { if [[ -n \"\${worker_pid:-}\" ]]; then kill \"\$worker_pid\" 2>/dev/null || true; wait \"\$worker_pid\" 2>/dev/null || true; fi; }; run_codex_attempt() { local prompt_file=\"\$1\"; local -a codex_args=( $codex_bin_quoted exec --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only --model $model_quoted --config $effort_config_quoted --config \"mcp_servers.vibe_browser.url=\\\"\$mcp_url\\\"\" --config \"mcp_servers.vibe_browser.http_headers.Authorization=\\\"Bearer \$bearer_token\\\"\" --cd $run_dir_quoted --disable shell_tool --disable unified_exec --disable multi_agent --disable image_generation --disable view_image --json --output-last-message $last_message_quoted \"\$(<\"\$prompt_file\")\" ); \"\${codex_args[@]}\" 2>&1 | $output_filter_command | tee -a $log_file_quoted; return \${PIPESTATUS[0]}; }; trap cleanup EXIT INT TERM; $worker_command > $worker_log_quoted 2>&1 & worker_pid=\$!; for readiness_attempt in {1..400}; do if [[ -s $manifest_quoted ]]; then break; fi; if ! kill -0 \"\$worker_pid\" 2>/dev/null; then printf '%s\\n' worker-error > $status_file_quoted; printf '\\nMCP worker exited before readiness. Logs: %s\\n' $worker_log_quoted; read -r; exit 1; fi; sleep 0.05; done; if [[ ! -s $manifest_quoted ]]; then printf '%s\\n' worker-timeout > $status_file_quoted; printf '\\nTimed out waiting for MCP worker manifest. Logs: %s\\n' $worker_log_quoted; read -r; exit 1; fi; mcp_url=\$(sed -n 's/.*\"url\": \"\\([^\"]*\\)\".*/\\1/p' $manifest_quoted); bearer_token=\$(sed -n 's/.*\"bearerToken\": \"\\([^\"]*\\)\".*/\\1/p' $manifest_quoted); if [[ ! \"\$mcp_url\" =~ ^http://(127\\.0\\.0\\.1|localhost):[0-9]+/.+ || ! \"\$bearer_token\" =~ ^[a-f0-9]{64}$ ]]; then printf '%s\\n' worker-manifest-error > $status_file_quoted; printf '\\nCould not read MCP worker manifest.\\n'; read -r; exit 1; fi; printf '\\n%s Browser and MCP worker ready.\\n' \"$run_id\"; attempt=1; run_status=incomplete; codex_status=0; while [[ \"\$attempt\" -le \"$MAX_ATTEMPTS\" ]]; do if [[ \"\$attempt\" -gt 1 ]]; then printf '\\nStarting Codex continuation attempt %s/%s for the existing MCP/browser worker.\\n' \"\$attempt\" \"$MAX_ATTEMPTS\"; fi; if [[ \"\$attempt\" -eq 1 ]]; then run_codex_attempt $initial_prompt_quoted; codex_status=\$?; else run_codex_attempt $continuation_prompt_quoted; codex_status=\$?; fi; if [[ \"\$codex_status\" -ne 0 ]]; then run_status=error; break; elif [[ -f $last_message_quoted ]] && grep -Eqi 'RESULTS_SAVED|Results saved successfully' $last_message_quoted; then run_status=completed; break; elif [[ -f $last_message_quoted ]] && grep -Eqi 'RESULTS_DOWNLOADED|Download trajectories|Download results' $last_message_quoted; then run_status=manual-save; break; else run_status=incomplete; fi; if [[ \"\$attempt\" -lt \"$MAX_ATTEMPTS\" ]]; then attempt=\$((attempt + 1)); else break; fi; done; if [[ \"\$run_status\" == incomplete && \"\$attempt\" -ge \"$MAX_ATTEMPTS\" ]]; then printf '\\nCodex continuation attempts exhausted (%s).\\n' \"$MAX_ATTEMPTS\"; fi; printf '%s\\n' \"\$run_status\" > $status_file_quoted; printf '\\nNative Codex status: %s (exit=%s, attempts=%s). Logs: %s\\n' \"\$run_status\" \"\$codex_status\" \"\$attempt\" $log_file_quoted; read -r"
+  command_string="set -uo pipefail; cleanup() { if [[ -n \"\${worker_pid:-}\" ]]; then kill \"\$worker_pid\" 2>/dev/null || true; wait \"\$worker_pid\" 2>/dev/null || true; fi; }; attempt_label() { printf 'attempt-%03d' \"\$1\"; }; visible_terminal_result() { local last_message=\"\$1\"; if [[ -f $events_file_quoted ]] && grep -Eq '\"type\":\"backend-event\".*\"status\":2[0-9][0-9].*\"ok\":true|\"type\": \"backend-event\".*\"status\": 2[0-9][0-9].*\"ok\": true' $events_file_quoted; then printf '%s\\n' completed; return 0; fi; if [[ -f \"\$last_message\" ]] && grep -Eqi 'RESULTS_SAVED|Results saved successfully' \"\$last_message\"; then printf '%s\\n' completed; return 0; fi; if [[ -f \"\$last_message\" ]] && grep -Eqi 'RESULTS_DOWNLOADED|Download trajectories|Download results|manual-save/download' \"\$last_message\"; then printf '%s\\n' manual-save; return 0; fi; return 1; }; run_codex_attempt() { local attempt=\"\$1\"; local label; label=\$(attempt_label \"\$attempt\"); local attempt_dir=$run_dir_quoted/\"\$label\"; local prompt_file=\"\$attempt_dir/prompt-\$label.txt\"; local last_message=\"\$attempt_dir/last-message.txt\"; local raw_log_file=\"\$attempt_dir/codex.jsonl\"; local terminal_log_file=\"\$attempt_dir/terminal.log\"; mkdir -p \"\$attempt_dir\"; local -a codex_args=( $codex_bin_quoted exec --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only --model $model_quoted --config $effort_config_quoted --config \"mcp_servers.vibe_browser.url=\\\"\$mcp_url\\\"\" --config \"mcp_servers.vibe_browser.http_headers.Authorization=\\\"Bearer \$bearer_token\\\"\" --cd $run_dir_quoted --disable shell_tool --disable unified_exec --disable multi_agent --disable image_generation --disable view_image --json --output-last-message \"\$last_message\" \"\$(<\"\$prompt_file\")\" ); : > \"\$raw_log_file\"; : > \"\$terminal_log_file\"; \"\${codex_args[@]}\" 2>&1 | CODEX_RUN_ID=\"$run_id\" CODEX_ATTEMPT=\"\$attempt\" CODEX_RAW_LOG_PATH=\"\$raw_log_file\" $output_filter_command | tee -a \"\$terminal_log_file\"; return \${PIPESTATUS[0]}; }; trap cleanup EXIT INT TERM; AGENT_RUNS_DIR=$runs_dir_quoted $worker_command > $worker_log_quoted 2>&1 & worker_pid=\$!; for readiness_attempt in {1..400}; do if [[ -s $manifest_quoted ]]; then break; fi; if ! kill -0 \"\$worker_pid\" 2>/dev/null; then printf '%s\\n' worker-error > $status_file_quoted; printf '\\nMCP worker exited before readiness. Logs: %s\\n' $worker_log_quoted; read -r; exit 1; fi; sleep 0.05; done; if [[ ! -s $manifest_quoted ]]; then printf '%s\\n' worker-timeout > $status_file_quoted; printf '\\nTimed out waiting for MCP worker manifest. Logs: %s\\n' $worker_log_quoted; read -r; exit 1; fi; mcp_url=\$(sed -n 's/.*\"url\": \"\\([^\"]*\\)\".*/\\1/p' $manifest_quoted); bearer_token=\$(sed -n 's/.*\"bearerToken\": \"\\([^\"]*\\)\".*/\\1/p' $manifest_quoted); if [[ ! \"\$mcp_url\" =~ ^http://(127\\.0\\.0\\.1|localhost):[0-9]+/.+ || ! \"\$bearer_token\" =~ ^[a-f0-9]{64}$ ]]; then printf '%s\\n' worker-manifest-error > $status_file_quoted; printf '\\nCould not read MCP worker manifest.\\n'; read -r; exit 1; fi; printf '\\n%s Browser and MCP worker ready. Public instruction: %s\\n' \"$run_id\" $public_prompt_quoted; attempt=1; run_status=INCOMPLETE; codex_status=0; while [[ \"\$attempt\" -le \"$MAX_ATTEMPTS\" ]]; do label=\$(attempt_label \"\$attempt\"); last_message=$run_dir_quoted/\"\$label/last-message.txt\"; raw_log_file=$run_dir_quoted/\"\$label/codex.jsonl\"; if [[ \"\$attempt\" -gt 1 ]]; then printf '\\nStarting Codex continuation attempt %s/%s for the existing MCP/browser worker. Reconnect to the existing MCP browser worker, call observe before any pointer input, and reuse the same public task instruction.\\n' \"\$attempt\" \"$MAX_ATTEMPTS\"; fi; run_codex_attempt \"\$attempt\"; codex_status=\$?; if visible_terminal_result \"\$last_message\" >/tmp/codex-native-visible-status.$$; then run_status=\$(cat /tmp/codex-native-visible-status.$$); rm -f /tmp/codex-native-visible-status.$$; break; fi; rm -f /tmp/codex-native-visible-status.$$; if [[ -f \"\$raw_log_file\" ]] && grep -Eqi 'MCP.*(terminated|closed|disconnect|connection|transport)|transport.*(terminated|closed|disconnect)' \"\$raw_log_file\"; then printf '\\nRetryable MCP transport termination detected on %s.\\n' \"\$label\"; fi; if ! kill -0 \"\$worker_pid\" 2>/dev/null; then run_status=INCOMPLETE; printf '\\nMCP worker stopped before a visible terminal result.\\n'; break; fi; if [[ \"\$attempt\" -lt \"$MAX_ATTEMPTS\" ]]; then attempt=\$((attempt + 1)); else break; fi; done; if [[ \"\$run_status\" == INCOMPLETE && \"\$attempt\" -ge \"$MAX_ATTEMPTS\" ]]; then printf '\\nCodex continuation attempts exhausted (%s). INCOMPLETE\\n' \"$MAX_ATTEMPTS\"; fi; printf '%s\\n' \"\$run_status\" > $status_file_quoted; printf '\\nNative Codex status: %s (exit=%s, attempts=%s). Logs: %s/%s/codex.jsonl\\n' \"\$run_status\" \"\$codex_status\" \"\$attempt\" $run_dir_quoted \"\$(attempt_label \"\$attempt\")\"; read -r"
   local tmux_command
   printf -v tmux_command 'bash -lc %q' "$command_string"
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
     printf "  worker command: %s\n" "$dry_worker_command"
+    printf "  attempt files: %s\n" "$run_dir/attempt-001/codex.jsonl $run_dir/attempt-001/terminal.log $run_dir/attempt-001/last-message.txt $run_dir/attempt-002/codex.jsonl $run_dir/attempt-002/terminal.log $run_dir/attempt-002/last-message.txt"
+    printf "  prompt files: %s\n" "$run_dir/prompt-public.txt $run_dir/attempt-001/prompt-attempt-001.txt $run_dir/attempt-002/prompt-attempt-002.txt"
+    printf "  continuation instruction: Reconnect to the existing MCP browser worker; call observe before any pointer input; reuse the same public task instruction.\n"
+    printf "  terminal markers: RESULTS_SAVED\\|RESULTS_DOWNLOADED; exhausted status: INCOMPLETE\n"
     printf "  codex command: %s\n" "$dry_initial_codex_command"
     printf "  command: %s\n" "$tmux_command"
     return
