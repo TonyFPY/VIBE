@@ -51,6 +51,7 @@ assert_contains "$dry_run_output" "agent-browser-http"
 assert_contains "$dry_run_output" "scripts/codex-mcp-worker.sh"
 assert_contains "$dry_run_output" "mcp_servers.vibe_browser.url="
 assert_contains "$dry_run_output" "mcp_servers.vibe_browser.http_headers.Authorization="
+assert_contains "$dry_run_output" "--ignore-user-config"
 assert_contains "$dry_run_output" "http://127.0.0.1:44646/mcp"
 assert_contains "$dry_run_output" "http://127.0.0.1:44647/mcp"
 assert_contains "$dry_run_output" "AGENT_BROWSER_HEADLESS=false"
@@ -109,9 +110,24 @@ if ! should_retry_codex_attempt 1 "$raw_log_file" "$last_message_file"; then
   exit 1
 fi
 
+printf '{"type":"action-rejected","actionType":"click","error":"Fresh visible observation required before pointer input"}\n' > "$events_file"
+: > "$raw_log_file"
+: > "$last_message_file"
+if ! should_retry_codex_attempt 0 "$raw_log_file" "$last_message_file" "$events_file"; then
+  echo "Expected worker action-rejected event to be retryable" >&2
+  exit 1
+fi
+
+printf '{"type":"run-aborted","reason":"repeated-pointer-sequence"}\n' > "$events_file"
+if ! should_retry_codex_attempt 0 "$raw_log_file" "$last_message_file" "$events_file"; then
+  echo "Expected worker run-aborted event to be retryable" >&2
+  exit 1
+fi
+
 printf 'fatal config error\n' > "$raw_log_file"
 printf 'stopped\n' > "$last_message_file"
-if should_retry_codex_attempt 1 "$raw_log_file" "$last_message_file"; then
+printf '{"type":"observation","screenshotId":"observation-000001"}\n' > "$events_file"
+if should_retry_codex_attempt 1 "$raw_log_file" "$last_message_file" "$events_file"; then
   echo "Expected hard Codex failures without retry markers to stop" >&2
   exit 1
 fi

@@ -178,16 +178,19 @@ from the readable output, but agent messages, tool names, coordinates, errors,
 statuses, and usage remain visible.
 
 The launcher passes the MCP URL and bearer token inline to each fresh
-`codex exec` attempt. It does not call `codex mcp add`, does not modify global
-Codex configuration, and does not rely on Chrome-plugin bootstrap, raw CDP,
-or direct Playwright access from the model. The tmux windows show formatted
-execution logs rather than the interactive Codex TUI.
+`codex exec` attempt and always includes `--ignore-user-config`, so user-level
+MCP servers cannot extend the screenshot-only `vibe_browser` boundary. It does
+not call `codex mcp add`, does not modify global Codex configuration, and does
+not rely on Chrome-plugin bootstrap, raw CDP, or direct Playwright access from
+the model. The tmux windows show formatted execution logs rather than the
+interactive Codex TUI.
 
-The old `--headed` option remains accepted for command compatibility but has
-no effect because these runs are always headed. Multiple Codex Chrome-control
-processes can compete for the same desktop pointer and focus. Use separate
-participant IDs and explicit isolated worker requests when you need parallel
-local runs.
+Codex MCP workers are headless by default. Use `--headed <id...>` to open a
+visible Chromium worker for selected participant IDs. The compatibility modes
+`--browser-profile isolated` and `--browser-launch external` also request
+headed workers for the affected runs. Multiple headed workers can compete for
+window focus and the desktop pointer, so prefer default headless mode for
+parallel batches unless visual inspection is needed.
 
 The readable terminal stream keeps model/status lines concise:
 

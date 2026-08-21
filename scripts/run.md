@@ -117,11 +117,13 @@ Codex runs now use the repository's persistent Playwright MCP worker path.
 Use `--dry-run` to inspect each Codex command before starting tmux. Each fresh
 `codex exec` attempt receives the same worker's loopback MCP URL and bearer
 token inline, so the model reconnects to the existing browser/controller
-instead of launching a second browser for the same participant ID. The old
-`--headed` option is accepted for compatibility but has no effect because
-these runs are always headed. The launcher does not call `codex mcp add`,
-does not modify the user's global Codex configuration, and does not allow
-Chrome-plugin, raw CDP, or direct Playwright fallbacks from the model.
+instead of launching a second browser for the same participant ID. Every
+`codex exec` attempt includes `--ignore-user-config` while keeping the
+`vibe_browser` MCP server configured inline, so user-level MCP servers cannot
+bypass the four-tool screenshot-only boundary. The launcher does not call
+`codex mcp add`, does not modify the user's global Codex configuration, and
+does not allow Chrome-plugin, raw CDP, or direct Playwright fallbacks from the
+model.
 
 Each run allows five Codex turns by default. If a turn ends with
 `INCOMPLETE` before the visible save screen, the launcher starts a fresh
@@ -148,6 +150,8 @@ reconnect to the existing MCP browser worker, call `observe` before any pointer
 input, and continue from the newest visible page state instead of restarting
 the experiment.
 
-These runs are headed, so multiple local workers can still compete for window
-focus and the desktop pointer. Use explicit isolated worker requests when you
-need parallel local runs.
+Runs are headless by default. Use `--headed <id...>` for selected visible
+Chromium workers, or request the compatibility modes `--browser-profile
+isolated` / `--browser-launch external`, which also force headed workers.
+Multiple headed workers can compete for window focus and the desktop pointer;
+default headless mode is the safer choice for parallel batches.

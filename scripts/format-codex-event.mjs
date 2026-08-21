@@ -1,4 +1,7 @@
 const MODEL_TEXT_LIMIT = 320;
+const BASE64_PAYLOAD_PATTERN = /\b[A-Za-z0-9+/]{96,}={0,2}\b/g;
+const DATA_URI_PATTERN = /data:[^,\s]+;base64,[A-Za-z0-9+/=._-]+/gi;
+const DATA_FIELD_PATTERN = /\bdata\s*[:=]\s*(?:[A-Za-z0-9+/]{32,}={0,2}|data:[^,\s]+;base64,[A-Za-z0-9+/=._-]+)/gi;
 
 function prefix(context = {}) {
   const runId = context.runId ?? "run";
@@ -13,6 +16,13 @@ function normalizeWhitespace(text) {
 function truncate(text, limit = MODEL_TEXT_LIMIT) {
   if (text.length <= limit) return text;
   return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+}
+
+export function sanitizeTerminalPayloadText(text) {
+  return String(text ?? "")
+    .replace(DATA_URI_PATTERN, "[omitted data-uri payload]")
+    .replace(DATA_FIELD_PATTERN, "payload-like output omitted")
+    .replace(BASE64_PAYLOAD_PATTERN, "[omitted base64 payload]");
 }
 
 function formatError(error) {
@@ -46,7 +56,7 @@ function completionSummary(tool, args = {}, result = {}) {
 }
 
 export function formatModelMessage(text, context = {}) {
-  const normalized = truncate(normalizeWhitespace(text));
+  const normalized = truncate(normalizeWhitespace(sanitizeTerminalPayloadText(text)));
   return normalized ? `${prefix(context)} ${normalized}` : prefix(context);
 }
 
@@ -56,7 +66,7 @@ export function summarizeToolEvent(event, context = {}) {
   const { item } = event;
   const tool = item.tool ?? "tool";
   const coord = coordinates(item.arguments);
-  const errorText = truncate(normalizeWhitespace(formatError(item.error)));
+  const errorText = truncate(normalizeWhitespace(sanitizeTerminalPayloadText(formatError(item.error))));
 
   if (event.type === "item.started") {
     if (tool === "wait" && Number.isFinite(item.arguments?.milliseconds)) {
@@ -108,7 +118,7 @@ export function formatCodexEvent(event, context = {}) {
   if (event.type === "thread.started") return undefined;
 
   if (event.type === "error") {
-    return `${prefix(context)} error: ${truncate(normalizeWhitespace(formatError(event.error ?? event.message ?? event)))}`;
+    return `${prefix(context)} error: ${truncate(normalizeWhitespace(sanitizeTerminalPayloadText(formatError(event.error ?? event.message ?? event))))}`;
   }
 
   if (typeof event.type === "string") return `${prefix(context)} event ${event.type}`;

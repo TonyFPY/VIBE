@@ -54,6 +54,25 @@ test("sanitizes payload-like non-json output before printing it", () => {
   );
 });
 
+test("sanitizes payload-like model messages before printing them", () => {
+  const formatted = formatCodexLine(
+    JSON.stringify({
+      type: "item.completed",
+      item: {
+        type: "agent_message",
+        text: "Trial data:image/jpeg;base64," + "A".repeat(160) + " data=" + "B".repeat(120),
+      },
+    }),
+    { runId: "A46", attempt: 2 },
+  );
+
+  assert.equal(
+    formatted,
+    "[A46 attempt 2] Trial [omitted data-uri payload] payload-like output omitted",
+  );
+  assert.doesNotMatch(formatted, /data:image|A{20}|B{20}/);
+});
+
 test("writes raw jsonl separately while printing only filtered text", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "codex-filter-"));
   const rawLogPath = path.join(root, "raw.jsonl");

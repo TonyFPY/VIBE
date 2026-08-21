@@ -4,11 +4,9 @@ import { appendFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 
-import { formatCodexEvent, formatTerminalText } from "./format-codex-event.mjs";
+import { formatCodexEvent, formatTerminalText, sanitizeTerminalPayloadText } from "./format-codex-event.mjs";
 
 export const NON_JSON_LINE_LIMIT = 320;
-const BASE64_PAYLOAD_PATTERN = /\b[A-Za-z0-9+/]{96,}={0,2}\b/g;
-const DATA_URI_PATTERN = /data:[^,\s]+;base64,[A-Za-z0-9+/=._-]+/gi;
 const DATA_FIELD_PATTERN = /\bdata\s*[:=]\s*(?:[A-Za-z0-9+/]{32,}={0,2}|data:[^,\s]+;base64,[A-Za-z0-9+/=._-]+)/i;
 
 function buildContext(overrides = {}) {
@@ -30,9 +28,7 @@ export function formatCodexLine(line, overrides = {}) {
     if (DATA_FIELD_PATTERN.test(line)) {
       return formatTerminalText("payload-like output omitted", context);
     }
-    let sanitized = line
-      .replace(DATA_URI_PATTERN, "[omitted data-uri payload]")
-      .replace(BASE64_PAYLOAD_PATTERN, "[omitted base64 payload]");
+    let sanitized = sanitizeTerminalPayloadText(line);
     const clipped = sanitized.length > NON_JSON_LINE_LIMIT
       ? `${sanitized.slice(0, NON_JSON_LINE_LIMIT).trimEnd()}…`
       : sanitized;

@@ -15,7 +15,7 @@ test("formats model messages with prefixes and normalized whitespace", () => {
 });
 
 test("truncates long model text", () => {
-  const formatted = formatModelMessage(`Result ${"x".repeat(400)}`, { runId: "A48", attempt: 3 });
+  const formatted = formatModelMessage(`Result ${"ordinary prose ".repeat(40)}`, { runId: "A48", attempt: 3 });
   assert.ok(formatted.startsWith("[A48 attempt 3] Result "));
   assert.ok(formatted.endsWith("…"));
   assert.ok(formatted.length < 360);

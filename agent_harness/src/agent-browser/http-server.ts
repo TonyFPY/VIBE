@@ -148,6 +148,7 @@ export async function startAgentBrowserHttpServer(
       enableJsonResponse: true,
       sessionIdGenerator: () => randomUUID(),
     });
+    toolset.beginMcpSession();
     const server = createVisualBrowserMcpServer(toolset);
     const session: SessionHandle = {
       transport,
@@ -158,6 +159,7 @@ export async function startAgentBrowserHttpServer(
         session.closed = true;
         try {
           await server.close();
+          await transport.close();
         } finally {
           const sessionId = transport.sessionId;
           if (sessionId) sessions.delete(sessionId);
@@ -236,8 +238,8 @@ export async function startAgentBrowserHttpServer(
     close: async () => {
       if (closed) return;
       closed = true;
-      await closeServer(httpServer).catch(() => undefined);
       await Promise.allSettled(Array.from(allSessions, (session) => session.close()));
+      await closeServer(httpServer).catch(() => undefined);
       await toolset.close();
     },
   };

@@ -39,6 +39,12 @@ raw_log_has_retryable_transport() {
   grep -Eqi 'MCP.*(terminated|closed|disconnect|connection|transport)|transport.*(terminated|closed|disconnect)' "$raw_log_file"
 }
 
+worker_events_have_retryable_refresh_trigger() {
+  local events_file="$1"
+  [[ -f "$events_file" ]] || return 1
+  grep -Eq '"type"[[:space:]]*:[[:space:]]*"action-rejected"|"type"[[:space:]]*:[[:space:]]*"run-aborted"' "$events_file"
+}
+
 attempt_marked_incomplete() {
   local last_message="$1"
   [[ -f "$last_message" ]] || return 1
@@ -49,12 +55,17 @@ should_retry_codex_attempt() {
   local codex_status="$1"
   local raw_log_file="$2"
   local last_message="$3"
+  local events_file="${4:-}"
 
   if attempt_marked_incomplete "$last_message"; then
     return 0
   fi
 
   if raw_log_has_retryable_transport "$raw_log_file"; then
+    return 0
+  fi
+
+  if [[ -n "$events_file" ]] && worker_events_have_retryable_refresh_trigger "$events_file"; then
     return 0
   fi
 

@@ -196,6 +196,72 @@ describe("startAgentBrowserHttpServer", () => {
     expect(logger.screenshots).toHaveLength(2);
   });
 
+  it("requires each fresh HTTP MCP session to observe before pointer input", async () => {
+    const host = new FakeHost();
+    const logger = new FakeLogger();
+    const handle = await startAgentBrowserHttpServer(environment, factoriesFor(host, logger));
+    handles.push(handle);
+
+    const clientA = await connectClient(handle.url, "test-bearer-token");
+    const observeA = await clientA.client.callTool({ name: "observe", arguments: {} });
+    expect(observeA.isError).not.toBe(true);
+
+    await clientA.transport.terminateSession();
+    await clientA.client.close();
+    clients.pop();
+
+    const clientB = await connectClient(handle.url, "test-bearer-token");
+    const staleMove = await clientB.client.callTool({
+      name: "move",
+      arguments: { type: "move", x: 10, y: 20 },
+    });
+    expect(staleMove.isError).toBe(true);
+
+    const observeB = await clientB.client.callTool({ name: "observe", arguments: {} });
+    expect(observeB.isError).not.toBe(true);
+    const freshMove = await clientB.client.callTool({
+      name: "move",
+      arguments: { type: "move", x: 10, y: 20 },
+    });
+    expect(freshMove.isError).not.toBe(true);
+
+    expect(host.session.actions).toEqual([
+      ["screenshot", 90],
+      ["screenshot", 90],
+      ["move", 10, 20],
+    ]);
+    expect(logger.events).toContainEqual(expect.objectContaining({
+      type: "action-rejected",
+      actionType: "move",
+      error: "Fresh visible observation required before pointer input",
+    }));
+  });
+
+  it("closes active MCP sessions before closing the HTTP listener", async () => {
+    const host = new FakeHost();
+    const logger = new FakeLogger();
+    const handle = await startAgentBrowserHttpServer(environment, factoriesFor(host, logger));
+    handles.push(handle);
+
+    await connectClient(handle.url, "test-bearer-token");
+
+    let closeResolved = false;
+    const closePromise = handle.close().then(() => {
+      closeResolved = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    if (!closeResolved) {
+      while (clients.length > 0) await clients.pop()!.close();
+      await closePromise;
+    }
+
+    expect(closeResolved).toBe(true);
+    expect(host.closed).toBe(true);
+    expect(logger.closed).toBe(true);
+    handles.pop();
+  });
+
   it("closes the HTTP server and owned browser resources", async () => {
     const host = new FakeHost();
     const logger = new FakeLogger();
